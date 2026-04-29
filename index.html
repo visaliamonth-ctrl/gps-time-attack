@@ -127,6 +127,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .btn-act:disabled{opacity:0.4;cursor:default}
 .btn-sec{padding:16px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);font-family:var(--fb);font-size:13px;color:var(--muted);cursor:pointer}
 
+/* ローリングスタート */
+.mode-toggle{display:grid;grid-template-columns:1fr 1fr;gap:0;background:var(--surface2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:0}
+.mode-btn{padding:10px 6px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;border:none;background:transparent;font-family:var(--fb);transition:all 0.2s;line-height:1.4}
+.mode-btn.active{background:rgba(0,229,255,0.12);color:var(--accent);font-weight:500}
+.mode-btn span{display:block;font-size:10px;opacity:0.7;margin-top:2px}
+.rolling-status{background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.2);border-radius:10px;padding:12px 14px;text-align:center}
+.rolling-status-label{font-size:11px;color:var(--muted);margin-bottom:4px;letter-spacing:1px}
+.rolling-dist{font-family:var(--fd);font-size:36px;font-weight:700;color:var(--accent);line-height:1}
+.rolling-dist-unit{font-size:13px;color:var(--muted);margin-left:4px}
+.rolling-hint{font-size:11px;color:var(--muted);margin-top:5px}
+.rolling-status.near{border-color:rgba(0,255,136,0.4);background:rgba(0,255,136,0.06)}
+.rolling-status.near .rolling-dist{color:var(--green)}
+
 /* ===== RECORDS ===== */
 .rec-body{padding:12px;display:flex;flex-direction:column;gap:8px}
 .rec-toolbar{display:flex;justify-content:flex-end;gap:8px}
@@ -183,7 +196,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   <div class="hdr">
     <div class="hdr-left">
       <div class="hdr-title">TIME ATTACK</div>
-      <div class="hdr-ver">v1.5.4</div>
+      <div class="hdr-ver">v1.6.2</div>
     </div>
     <div class="gps-badge">
       <div class="gps-dot" id="gps-dot"></div>
@@ -289,6 +302,23 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
         </div>
 
+        <!-- モード切替 -->
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="mode-normal" onclick="setRaceMode('normal')">
+            ノーマル<span>ボタンでスタート</span>
+          </button>
+          <button class="mode-btn" id="mode-rolling" onclick="setRaceMode('rolling')">
+            ローリング<span>地点到着でスタート</span>
+          </button>
+        </div>
+
+        <!-- ローリング待機表示 (非表示) -->
+        <div class="rolling-status" id="rolling-waiting" style="display:none">
+          <div class="rolling-status-label">スタート地点まで</div>
+          <div class="rolling-dist" id="rolling-dist">—<span class="rolling-dist-unit"></span></div>
+          <div class="rolling-hint" id="rolling-hint">スタート地点に近づいてください（30m以内で自動スタート）</div>
+        </div>
+
         <div class="race-btns">
           <button class="btn-act start" id="btn-race" onclick="raceAction()">START</button>
           <button class="btn-sec" onclick="resetRace()">リセット</button>
@@ -338,7 +368,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const VERSION = 'v1.5.4';
+const VERSION = 'v1.6.2';
 
 // ===== STATE =====
 let map, raceMap, startMarker, goalMarker, routeLayer;
@@ -348,6 +378,8 @@ let startLL = null, goalLL = null;
 let setupStep = 0;
 let courseDistM = 0, routeCoords = [], estDurSec = 0, straightDistM = 0, roadName = '';
 let isRacing = false, raceFinished = false;
+let raceMode = 'normal'; // 'normal' | 'rolling'
+let rollingWaiting = false, rollingWatchId = null;
 let startTime = null, elapsedMs = 0;
 let maxSpeed = 0, traveledM = 0;
 let watchId = null, timerRaf = null, minuteTimer = null;
@@ -600,10 +632,80 @@ function showTab(name) {
   if (name === 'records') renderRecords();
 }
 
+// ===== RACE MODE =====
+function setRaceMode(mode) {
+  raceMode = mode;
+  document.getElementById('mode-normal').classList.toggle('active', mode === 'normal');
+  document.getElementById('mode-rolling').classList.toggle('active', mode === 'rolling');
+  const btnRace = document.getElementById('btn-race');
+  if (mode === 'rolling') {
+    btnRace.textContent = 'ROLLING START';
+    btnRace.className = 'btn-act start';
+  } else {
+    btnRace.textContent = 'START';
+    btnRace.className = 'btn-act start';
+  }
+  // 待機中だったら停止
+  if (rollingWaiting) stopRollingWait();
+  document.getElementById('rolling-waiting').style.display = 'none';
+}
+
+function startRollingWait() {
+  if (!routeCoords.length || !startLL) { alert('先にコースを設定してください'); showTab('setup'); return; }
+  getAudioCtx();
+  rollingWaiting = true;
+  document.getElementById('rolling-waiting').style.display = '';
+  document.getElementById('btn-race').textContent = 'キャンセル';
+  document.getElementById('btn-race').className = 'btn-act stop';
+  speak('スタート地点に近づいてください');
+
+  rollingWatchId = navigator.geolocation.watchPosition(pos => {
+    if (!rollingWaiting) return;
+    const dist = haversine(pos.coords.latitude, pos.coords.longitude, startLL.lat, startLL.lng);
+    const el = document.getElementById('rolling-dist');
+    const hint = document.getElementById('rolling-hint');
+    const card = document.getElementById('rolling-waiting');
+    el.innerHTML = dist >= 1000
+      ? (dist/1000).toFixed(2) + '<span class="rolling-dist-unit">km</span>'
+      : Math.round(dist) + '<span class="rolling-dist-unit">m</span>';
+    if (dist <= 15) {
+      card.classList.add('near');
+      hint.textContent = 'スタート！';
+      stopRollingWait();
+      getAudioCtx();
+      speak('スタートしました');
+      setTimeout(() => beginRace(), 800);
+    } else if (dist <= 100) {
+      card.classList.add('near');
+      hint.textContent = 'もうすぐスタート地点！（15m以内で自動スタート）';
+    } else {
+      card.classList.remove('near');
+      hint.textContent = 'スタート地点に近づいてください（15m以内で自動スタート）';
+    }
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 1000 });
+}
+
+function stopRollingWait() {
+  rollingWaiting = false;
+  if (rollingWatchId != null) { navigator.geolocation.clearWatch(rollingWatchId); rollingWatchId = null; }
+  document.getElementById('rolling-waiting').style.display = 'none';
+  document.getElementById('rolling-waiting').classList.remove('near');
+  const btnRace = document.getElementById('btn-race');
+  btnRace.textContent = 'ROLLING START';
+  btnRace.className = 'btn-act start';
+  btnRace.disabled = false;
+}
+
 // ===== COUNTDOWN =====
 function raceAction() {
-  if (!isRacing && !raceFinished) startCountdown();
-  else if (isRacing) finishRace(true);
+  if (isRacing) { finishRace(true); return; }
+  if (raceFinished) return;
+  if (raceMode === 'rolling') {
+    if (rollingWaiting) { stopRollingWait(); return; }
+    startRollingWait();
+  } else {
+    startCountdown();
+  }
 }
 
 function startCountdown() {
@@ -718,7 +820,7 @@ function beginRace() {
 
       // ゴール地点への直接距離で判定（30m以内）
       const distToGoal = goalLL ? haversine(pos.coords.latitude, pos.coords.longitude, goalLL.lat, goalLL.lng) : 9999;
-      if (distToGoal <= 30) finishRace(false);
+      if (distToGoal <= 15) finishRace(false);
     }, () => {}, { enableHighAccuracy: true, maximumAge: 1000 });
   }
 }
@@ -779,13 +881,14 @@ function resetRace() {
   cancelAnimationFrame(timerRaf); clearInterval(minuteTimer);
   if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   stopAmbientBGM();
+  if (rollingWaiting) stopRollingWait();
   if (raceLocMarker) { raceMap && raceMap.removeLayer(raceLocMarker); raceLocMarker = null; }
   goal500Done = false; goal100Done = false; lastBeepSec = -1; elapsedMs = 0; maxSpeed = 0; traveledM = 0;
   document.getElementById('timer').textContent = '00:00.00';
   document.getElementById('timer').className = 'timer-display';
   document.getElementById('race-status').textContent = 'スタートボタンを押してレース開始';
   document.getElementById('btn-race').className = 'btn-act start';
-  document.getElementById('btn-race').textContent = 'START';
+  document.getElementById('btn-race').textContent = raceMode === 'rolling' ? 'ROLLING START' : 'START';
   document.getElementById('btn-race').disabled = false;
   document.getElementById('stat-speed').innerHTML = '0.0<span class="stat-unit">km/h</span>';
   document.getElementById('stat-max').innerHTML = '0.0<span class="stat-unit">km/h</span>';
