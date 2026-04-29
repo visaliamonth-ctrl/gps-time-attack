@@ -70,8 +70,17 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .screen.active { display: block; }
 
 /* MAP */
-#map { width: 100%; height: 240px; }
+#map { width: 100%; height: 240px; position: relative; }
 .leaflet-container { background: #1a2535; }
+#locate-btn {
+  position: absolute; top: 10px; right: 10px; z-index: 1000;
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--accent); font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+#locate-btn.locating { animation: pulse 1s infinite; }
 
 /* SETUP */
 .setup-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -242,7 +251,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
     <!-- SETUP -->
     <div class="screen active" id="screen-setup">
-      <div id="map"></div>
+      <div id="map"></div><button id="locate-btn" onclick="locateMe()" title="現在地">◎</button>
       <div class="setup-body">
         <div class="hint-bar">
           <span class="hint-icon" id="hint-icon">📍</span>
@@ -342,7 +351,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ===================== STATE =====================
-let map, startMarker, goalMarker, routeLayer;
+let map, startMarker, goalMarker, routeLayer, myLocMarker, myLocCircle;
 let startLL = null, goalLL = null;
 let setupStep = 0; // 0=start, 1=goal, 2=done
 let courseDistM = 0, routeCoords = [];
@@ -370,7 +379,10 @@ window.addEventListener('load', () => {
 // ===================== MAP =====================
 function initMap() {
   map = L.map('map', { zoomControl: true, attributionControl: false });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+  // CartoDB Voyager - 高品質・無料・APIキー不要
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20, subdomains: 'abcd'
+  }).addTo(map);
   map.on('click', onMapClick);
 
   if (navigator.geolocation) {
@@ -478,10 +490,35 @@ async function fetchRoute(start, goal) {
 // ===================== GPS =====================
 function initGPS() {
   if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(
-    () => { document.getElementById('gps-dot').classList.add('ok'); document.getElementById('gps-label').textContent = 'GPS準備完了'; },
-    () => {}
-  );
+  navigator.geolocation.watchPosition(pos => {
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    const acc = pos.coords.accuracy;
+    document.getElementById('gps-dot').classList.add('ok');
+    document.getElementById('gps-label').textContent = 'GPS準備完了';
+    // 現在地マーカー更新
+    if (!myLocMarker) {
+      myLocCircle = L.circle(ll, { radius: acc, color: '#00e5ff', fillColor: '#00e5ff', fillOpacity: 0.08, weight: 1 }).addTo(map);
+      myLocMarker = L.marker(ll, { icon: L.divIcon({
+        className: '',
+        html: '<div style="width:16px;height:16px;border-radius:50%;background:#00e5ff;border:3px solid #fff;box-shadow:0 0 10px rgba(0,229,255,0.8)"></div>',
+        iconSize:[16,16], iconAnchor:[8,8]
+      }), zIndexOffset: 500 }).addTo(map);
+    } else {
+      myLocMarker.setLatLng(ll);
+      myLocCircle.setLatLng(ll);
+      myLocCircle.setRadius(acc);
+    }
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 3000 });
+}
+
+function locateMe() {
+  if (!navigator.geolocation) return;
+  const btn = document.getElementById('locate-btn');
+  btn.classList.add('locating');
+  navigator.geolocation.getCurrentPosition(pos => {
+    btn.classList.remove('locating');
+    map.setView([pos.coords.latitude, pos.coords.longitude], 17, { animate: true });
+  }, () => btn.classList.remove('locating'), { enableHighAccuracy: true });
 }
 
 // ===================== TABS =====================
@@ -503,39 +540,55 @@ function raceAction() {
 // --- カウントダウン ---
 function startCountdown() {
   if (!routeCoords.length) { alert('先にコースを設定してください'); showTab('setup'); return; }
-  const overlay = document.getElementById('countdown-overlay');
-  overlay.classList.add('show');
-  speak('スタートします', () => runCountStep(5));
+  document.getElementById('countdown-overlay').classList.add('show');
+  // 「スタートします」を読み上げてから厳密1秒×5カウント開始
+  speak('スタートします');
+  // 読み上げ時間を考慮して1秒後にカウント開始
+  setTimeout(() => runCountStep(5), 1000);
 }
 
 function runCountStep(n) {
   const numEl  = document.getElementById('cd-number');
   const ringEl = document.getElementById('cd-ring');
-  const circum = 2 * Math.PI * 70; // r=70
+  const circum = 2 * Math.PI * 70;
 
-  if (n === 0) {
+  if (n < 0) {
+    // GO表示
     numEl.textContent = 'GO!';
     numEl.className = 'cd-number cd-go';
     ringEl.style.strokeDashoffset = circum;
-    speak('GO', () => {
+    animPop(numEl);
+    speak('GO');
+    setTimeout(() => {
       document.getElementById('countdown-overlay').classList.remove('show');
       beginRace();
-    });
+    }, 800);
     return;
   }
 
-  numEl.textContent = n;
+  numEl.textContent = n > 0 ? String(n) : '';
   numEl.className = 'cd-number';
-  // ring: fill = n/5
+  // リング: n/5 の割合で埋める
   ringEl.style.strokeDashoffset = circum * (1 - n / 5);
-  // pop animation
-  numEl.style.transform = 'scale(1.4)'; numEl.style.opacity = '0';
-  requestAnimationFrame(() => {
-    numEl.style.transition = 'transform 0.3s ease-out, opacity 0.2s';
-    numEl.style.transform = 'scale(1)'; numEl.style.opacity = '1';
-  });
+  animPop(numEl);
 
-  speak(String(n), () => runCountStep(n - 1));
+  if (n > 0) {
+    speak(String(n));
+    setTimeout(() => runCountStep(n - 1), 1000); // 厳密1秒
+  } else {
+    setTimeout(() => runCountStep(-1), 200);
+  }
+}
+
+function animPop(el) {
+  el.style.transition = 'none';
+  el.style.transform = 'scale(1.5)'; el.style.opacity = '0';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.style.transition = 'transform 0.35s cubic-bezier(.17,.67,.35,1.2), opacity 0.2s';
+      el.style.transform = 'scale(1)'; el.style.opacity = '1';
+    });
+  });
 }
 
 // --- レース本体 ---
