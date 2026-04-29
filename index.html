@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TimeAttack">
+<meta name="theme-color" content="#0a0a14">
+<link rel="manifest" href="manifest.json">
+<title>GPS タイムアタック</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a14;
+  --surface: #12121f;
+  --surface2: #1a1a2e;
+  --border: rgba(255,255,255,0.08);
+  --accent: #00e5ff;
+  --accent2: #ff3d6b;
+  --green: #00ff88;
+  --text: #e8e8ff;
+  --muted: rgba(232,232,255,0.45);
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'Noto Sans JP', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+
+/* APP SHELL */
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+/* HEADER */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.header-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; letter-spacing: 2px; color: var(--accent); }
+.gps-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--muted);
+  background: rgba(255,255,255,0.04);
+  padding: 4px 10px; border-radius: 20px;
+  border: 1px solid var(--border);
+}
+.gps-dot { width: 7px; height: 7px; border-radius: 50%; background: #f39c12; }
+.gps-dot.ok { background: var(--green); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* TABS */
+.tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.tab {
+  flex: 1; padding: 11px 0; text-align: center; font-size: 12px;
+  color: var(--muted); cursor: pointer; position: relative;
+  font-family: var(--font-body); letter-spacing: 0.5px;
+  transition: color 0.2s;
+}
+.tab::after { content:''; position:absolute; bottom:0; left:20%; right:20%; height:2px; background:var(--accent); transform:scaleX(0); transition:transform 0.2s; border-radius:2px; }
+.tab.active { color: var(--accent); }
+.tab.active::after { transform:scaleX(1); }
+
+/* SCREENS */
+.screens { flex: 1; overflow: hidden; position: relative; }
+.screen { position: absolute; inset: 0; overflow-y: auto; display: none; -webkit-overflow-scrolling: touch; }
+.screen.active { display: block; }
+
+/* MAP */
+#map { width: 100%; height: 240px; }
+.leaflet-container { background: #1a2535; }
+
+/* SETUP */
+.setup-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.hint-bar {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(0,229,255,0.06); border: 1px solid rgba(0,229,255,0.2);
+  border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--accent);
+}
+.hint-icon { font-size: 16px; flex-shrink: 0; }
+.hint-reset { margin-left: auto; font-size: 11px; color: var(--muted); background: none; border: none; cursor: pointer; color: var(--accent2); }
+
+.points-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.point-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px;
+}
+.point-card-header { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+.marker-badge {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700;
+}
+.marker-s { background: #00ff88; color: #002a18; }
+.marker-g { background: #ff3d6b; color: #2a0010; }
+.point-label { font-size: 11px; color: var(--muted); }
+.point-coords { font-family: monospace; font-size: 11px; color: var(--text); line-height: 1.6; }
+
+.route-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px;
+  display: grid; grid-template-columns: 1fr 1px 1fr 1px 1fr;
+  align-items: center; gap: 0;
+}
+.route-divider { background: var(--border); height: 32px; }
+.route-item { text-align: center; }
+.route-item-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+.route-item-value { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--text); }
+
+.route-fetching { text-align: center; padding: 14px; color: var(--muted); font-size: 13px; }
+.route-error { color: var(--accent2); font-size: 12px; padding: 10px 12px; background: rgba(255,61,107,0.08); border-radius: 8px; border: 1px solid rgba(255,61,107,0.2); }
+
+.btn-primary {
+  width: 100%; padding: 14px;
+  background: linear-gradient(135deg, #00c8e0, #00e5ff);
+  border: none; border-radius: 12px;
+  font-family: var(--font-display); font-size: 18px; font-weight: 700;
+  color: #001a20; cursor: pointer; letter-spacing: 1px;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.btn-primary:disabled { opacity: 0.3; cursor: default; }
+.btn-primary:active:not(:disabled) { transform: scale(0.98); }
+
+/* RACE */
+.race-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+.timer-block { text-align: center; padding: 10px 0; }
+.timer-status { font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: 1px; }
+.timer-display {
+  font-family: var(--font-display); font-size: 62px; font-weight: 700;
+  letter-spacing: 3px; color: var(--text); line-height: 1;
+  transition: color 0.3s;
+}
+.timer-display.running { color: var(--accent); text-shadow: 0 0 30px rgba(0,229,255,0.4); }
+.timer-display.finished { color: var(--green); text-shadow: 0 0 30px rgba(0,255,136,0.4); }
+
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px; text-align: center;
+}
+.stat-label { font-size: 10px; color: var(--muted); margin-bottom: 5px; letter-spacing: 0.5px; }
+.stat-value { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--text); }
+.stat-unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
+
+.progress-block {}
+.progress-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.progress-track {
+  height: 6px; background: var(--surface2);
+  border-radius: 3px; overflow: hidden;
+  border: 1px solid var(--border);
+}
+.progress-fill { height: 100%; background: linear-gradient(90deg, #00c8e0, #00ff88); border-radius: 3px; transition: width 0.4s; width: 0%; }
+
+.race-btns { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+.btn-action {
+  padding: 14px; border-radius: 12px; border: none;
+  font-family: var(--font-display); font-size: 18px; font-weight: 700;
+  letter-spacing: 1px; cursor: pointer; transition: all 0.2s;
+}
+.btn-action.start { background: linear-gradient(135deg, #00c8e0, #00e5ff); color: #001a20; }
+.btn-action.stop  { background: linear-gradient(135deg, #ff2d55, #ff3d6b); color: #fff; }
+.btn-action.done  { background: var(--surface2); color: var(--muted); cursor: default; }
+.btn-action:disabled { opacity: 0.4; cursor: default; }
+.btn-secondary {
+  padding: 14px; border-radius: 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  font-family: var(--font-body); font-size: 13px; color: var(--muted);
+  cursor: pointer; transition: all 0.2s;
+}
+.btn-secondary:active { opacity: 0.7; }
+
+/* COUNTDOWN OVERLAY */
+#countdown-overlay {
+  position: fixed; inset: 0; z-index: 999;
+  background: rgba(10,10,20,0.92);
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center; gap: 20px;
+  backdrop-filter: blur(8px);
+}
+#countdown-overlay.show { display: flex; }
+.cd-label { font-size: 14px; color: var(--muted); letter-spacing: 2px; font-family: var(--font-display); }
+.cd-ring-wrap { position: relative; width: 160px; height: 160px; }
+.cd-ring-svg { width: 160px; height: 160px; transform: rotate(-90deg); }
+.cd-ring-bg { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 6; }
+.cd-ring-fg { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 440; stroke-dashoffset: 0; transition: stroke-dashoffset 0.5s ease; }
+.cd-number {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 80px; font-weight: 700; color: #fff;
+  transition: transform 0.15s ease-out, opacity 0.15s;
+}
+.cd-go { font-size: 52px; color: var(--green); }
+.cd-hint { font-size: 13px; color: var(--muted); }
+
+/* RECORDS */
+.records-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.no-records { text-align: center; padding: 50px 20px; color: var(--muted); font-size: 13px; line-height: 2; }
+.record-item {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.record-item.gold   { border-color: rgba(240,192,64,0.4); }
+.record-item.silver { border-color: rgba(180,180,180,0.3); }
+.record-item.bronze { border-color: rgba(180,100,50,0.3); }
+.record-rank { font-size: 24px; width: 28px; text-align: center; flex-shrink: 0; }
+.record-info { flex: 1; min-width: 0; }
+.record-date { font-size: 11px; color: var(--muted); }
+.record-dist { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.record-right { text-align: right; flex-shrink: 0; }
+.record-time { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--text); }
+.record-speed { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* SPINNER */
+.spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Leaflet overrides */
+.leaflet-control-zoom a { background: var(--surface2) !important; color: var(--text) !important; border-color: var(--border) !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div class="header-title">TIME ATTACK</div>
+    <div class="gps-badge">
+      <div class="gps-dot" id="gps-dot"></div>
+      <span id="gps-label">GPS待機中</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-setup" onclick="showTab('setup')">コース設定</div>
+    <div class="tab" id="tab-race"  onclick="showTab('race')">レース</div>
+    <div class="tab" id="tab-rec"   onclick="showTab('records')">記録</div>
+  </div>
+
+  <div class="screens">
+
+    <!-- SETUP -->
+    <div class="screen active" id="screen-setup">
+      <div id="map"></div>
+      <div class="setup-body">
+        <div class="hint-bar">
+          <span class="hint-icon" id="hint-icon">📍</span>
+          <span id="hint-text">地図をタップしてスタート地点を設定</span>
+          <button class="hint-reset" id="btn-reset-course" onclick="resetCourse()" style="display:none">リセット</button>
+        </div>
+
+        <div class="points-row">
+          <div class="point-card">
+            <div class="point-card-header">
+              <div class="marker-badge marker-s">S</div>
+              <span class="point-label">スタート</span>
+            </div>
+            <div class="point-coords" id="start-coords">未設定</div>
+          </div>
+          <div class="point-card">
+            <div class="point-card-header">
+              <div class="marker-badge marker-g">G</div>
+              <span class="point-label">ゴール</span>
+            </div>
+            <div class="point-coords" id="goal-coords">未設定</div>
+          </div>
+        </div>
+
+        <div id="route-status"></div>
+
+        <button class="btn-primary" id="btn-go" disabled onclick="showTab('race')">レーススタートへ →</button>
+      </div>
+    </div>
+
+    <!-- RACE -->
+    <div class="screen" id="screen-race">
+      <div class="race-body">
+        <div class="timer-block">
+          <div class="timer-status" id="race-status">スタートボタンを押してレース開始</div>
+          <div class="timer-display" id="timer">00:00.00</div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">現在の速度</div>
+            <div class="stat-value" id="stat-speed">0.0<span class="stat-unit">km/h</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">最高速度</div>
+            <div class="stat-value" id="stat-max">0.0<span class="stat-unit">km/h</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">移動距離</div>
+            <div class="stat-value" id="stat-moved">0<span class="stat-unit">m</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">残り距離</div>
+            <div class="stat-value" id="stat-remain">—</div>
+          </div>
+        </div>
+
+        <div class="progress-block">
+          <div class="progress-labels">
+            <span>スタート</span>
+            <span id="pct-label">0%</span>
+            <span>ゴール</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        </div>
+
+        <div class="race-btns">
+          <button class="btn-action start" id="btn-race" onclick="raceAction()">START</button>
+          <button class="btn-secondary" onclick="resetRace()">リセット</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECORDS -->
+    <div class="screen" id="screen-records">
+      <div class="records-body" id="records-list">
+        <div class="no-records">まだ記録がありません<br>レースを完了すると<br>ここに記録が表示されます</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- COUNTDOWN OVERLAY -->
+<div id="countdown-overlay">
+  <div class="cd-label">スタートまで</div>
+  <div class="cd-ring-wrap">
+    <svg class="cd-ring-svg" viewBox="0 0 160 160">
+      <circle class="cd-ring-bg" cx="80" cy="80" r="70"/>
+      <circle class="cd-ring-fg" id="cd-ring" cx="80" cy="80" r="70"/>
+    </svg>
+    <div class="cd-number" id="cd-number">5</div>
+  </div>
+  <div class="cd-hint">移動の準備をしてください</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ===================== STATE =====================
+let map, startMarker, goalMarker, routeLayer;
+let startLL = null, goalLL = null;
+let setupStep = 0; // 0=start, 1=goal, 2=done
+let courseDistM = 0, routeCoords = [];
+let straightDistM = 0, estDurSec = 0;
+
+let isRacing = false, raceFinished = false;
+let startTime = null, elapsedMs = 0;
+let maxSpeed = 0, traveledM = 0;
+let watchId = null, timerRaf = null;
+let records = JSON.parse(localStorage.getItem('ta_records') || '[]');
+
+// Sound
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+let synth = window.speechSynthesis;
+let minuteTimer = null, goalAnnouncedAt = null;
+let lastBeepSec = -1;
+
+// ===================== INIT =====================
+window.addEventListener('load', () => {
+  initMap();
+  initGPS();
+});
+
+// ===================== MAP =====================
+function initMap() {
+  map = L.map('map', { zoomControl: true, attributionControl: false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+  map.on('click', onMapClick);
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(p => {
+      map.setView([p.coords.latitude, p.coords.longitude], 16);
+    }, () => map.setView([35.68, 139.69], 14));
+  } else {
+    map.setView([35.68, 139.69], 14);
+  }
+}
+
+function makeIcon(color, label) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:30px;height:30px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#001a20;border:2px solid rgba(255,255,255,0.8);box-shadow:0 2px 8px rgba(0,0,0,0.5)">${label}</div>`,
+    iconSize: [30,30], iconAnchor: [15,15]
+  });
+}
+
+function onMapClick(e) {
+  const ll = e.latlng;
+  if (setupStep === 0) {
+    if (startMarker) map.removeLayer(startMarker);
+    startMarker = L.marker(ll, { icon: makeIcon('#00ff88','S') }).addTo(map);
+    startLL = ll;
+    document.getElementById('start-coords').textContent = ll.lat.toFixed(5) + '\n' + ll.lng.toFixed(5);
+    setHint('🏁', 'ゴール地点をタップしてください', true);
+    setupStep = 1;
+    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+    if (goalMarker) { map.removeLayer(goalMarker); goalMarker = null; }
+    goalLL = null;
+    courseDistM = 0;
+    document.getElementById('goal-coords').textContent = '未設定';
+    document.getElementById('route-status').innerHTML = '';
+    document.getElementById('btn-go').disabled = true;
+  } else if (setupStep === 1) {
+    if (goalMarker) map.removeLayer(goalMarker);
+    goalMarker = L.marker(ll, { icon: makeIcon('#ff3d6b','G') }).addTo(map);
+    goalLL = ll;
+    document.getElementById('goal-coords').textContent = ll.lat.toFixed(5) + '\n' + ll.lng.toFixed(5);
+    setupStep = 2;
+    setHint('⏳', 'ルートを検索中...', true);
+    document.getElementById('route-status').innerHTML = '<div class="route-fetching"><span class="spinner"></span>道路ルートを取得中...</div>';
+    fetchRoute(startLL, ll);
+  } else {
+    resetCourse();
+  }
+}
+
+function setHint(icon, text, showReset) {
+  document.getElementById('hint-icon').textContent = icon;
+  document.getElementById('hint-text').textContent = text;
+  document.getElementById('btn-reset-course').style.display = showReset ? '' : 'none';
+}
+
+function resetCourse() {
+  setupStep = 0;
+  if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+  if (goalMarker)  { map.removeLayer(goalMarker);  goalMarker  = null; }
+  if (routeLayer)  { map.removeLayer(routeLayer);  routeLayer  = null; }
+  startLL = null; goalLL = null; courseDistM = 0; routeCoords = [];
+  document.getElementById('start-coords').textContent = '未設定';
+  document.getElementById('goal-coords').textContent  = '未設定';
+  document.getElementById('route-status').innerHTML = '';
+  document.getElementById('btn-go').disabled = true;
+  setHint('📍', '地図をタップしてスタート地点を設定', false);
+}
+
+async function fetchRoute(start, goal) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${goal.lng},${goal.lat}?overview=full&geometries=geojson`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.code !== 'Ok' || !data.routes.length) throw new Error('no route');
+    const route = data.routes[0];
+    courseDistM = route.distance;
+    estDurSec   = route.duration;
+    routeCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+    straightDistM = haversine(start.lat, start.lng, goal.lat, goal.lng);
+
+    if (routeLayer) map.removeLayer(routeLayer);
+    routeLayer = L.polyline(routeCoords, { color: '#00e5ff', weight: 5, opacity: 0.85 }).addTo(map);
+    map.fitBounds(routeLayer.getBounds(), { padding: [28, 28] });
+
+    const roadStr   = fmtDist(courseDistM);
+    const straightStr = fmtDist(straightDistM);
+    const timeStr   = fmtDuration(estDurSec);
+    document.getElementById('route-status').innerHTML = `
+      <div class="route-card">
+        <div class="route-item"><div class="route-item-label">道路沿い</div><div class="route-item-value">${roadStr}</div></div>
+        <div class="route-divider"></div>
+        <div class="route-item"><div class="route-item-label">推定時間</div><div class="route-item-value">${timeStr}</div></div>
+        <div class="route-divider"></div>
+        <div class="route-item"><div class="route-item-label">直線距離</div><div class="route-item-value">${straightStr}</div></div>
+      </div>`;
+    setHint('✅', 'コース設定完了。タップでリセット。', true);
+    document.getElementById('btn-go').disabled = false;
+  } catch(e) {
+    document.getElementById('route-status').innerHTML = '<div class="route-error">ルートが見つかりませんでした。別の地点を試してください。</div>';
+    setupStep = 1;
+    setHint('🏁', 'ゴール地点を再設定してください', true);
+  }
+}
+
+// ===================== GPS =====================
+function initGPS() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    () => { document.getElementById('gps-dot').classList.add('ok'); document.getElementById('gps-label').textContent = 'GPS準備完了'; },
+    () => {}
+  );
+}
+
+// ===================== TABS =====================
+function showTab(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('screen-' + (name === 'records' ? 'records' : name)).classList.add('active');
+  document.getElementById('tab-' + (name === 'records' ? 'rec' : name)).classList.add('active');
+  if (name === 'setup') setTimeout(() => map && map.invalidateSize(), 80);
+  if (name === 'records') renderRecords();
+}
+
+// ===================== RACE =====================
+function raceAction() {
+  if (!isRacing && !raceFinished) startCountdown();
+  else if (isRacing) finishRace(true);
+}
+
+// --- カウントダウン ---
+function startCountdown() {
+  if (!routeCoords.length) { alert('先にコースを設定してください'); showTab('setup'); return; }
+  const overlay = document.getElementById('countdown-overlay');
+  overlay.classList.add('show');
+  speak('スタートします', () => runCountStep(5));
+}
+
+function runCountStep(n) {
+  const numEl  = document.getElementById('cd-number');
+  const ringEl = document.getElementById('cd-ring');
+  const circum = 2 * Math.PI * 70; // r=70
+
+  if (n === 0) {
+    numEl.textContent = 'GO!';
+    numEl.className = 'cd-number cd-go';
+    ringEl.style.strokeDashoffset = circum;
+    speak('GO', () => {
+      document.getElementById('countdown-overlay').classList.remove('show');
+      beginRace();
+    });
+    return;
+  }
+
+  numEl.textContent = n;
+  numEl.className = 'cd-number';
+  // ring: fill = n/5
+  ringEl.style.strokeDashoffset = circum * (1 - n / 5);
+  // pop animation
+  numEl.style.transform = 'scale(1.4)'; numEl.style.opacity = '0';
+  requestAnimationFrame(() => {
+    numEl.style.transition = 'transform 0.3s ease-out, opacity 0.2s';
+    numEl.style.transform = 'scale(1)'; numEl.style.opacity = '1';
+  });
+
+  speak(String(n), () => runCountStep(n - 1));
+}
+
+// --- レース本体 ---
+function beginRace() {
+  isRacing = true; raceFinished = false;
+  startTime = performance.now(); elapsedMs = 0;
+  maxSpeed = 0; traveledM = 0;
+
+  document.getElementById('race-status').textContent = 'レース中！ゴールへ向かってください';
+  document.getElementById('timer').className = 'timer-display running';
+  document.getElementById('btn-race').className = 'btn-action stop';
+  document.getElementById('btn-race').textContent = 'STOP';
+  setRemain(courseDistM);
+
+  // タイマー
+  function tick() {
+    if (!isRacing) return;
+    elapsedMs = performance.now() - startTime;
+    document.getElementById('timer').textContent = fmtTime(elapsedMs);
+    timerRaf = requestAnimationFrame(tick);
+  }
+  timerRaf = requestAnimationFrame(tick);
+
+  // BGM (YouTube Music では自動再生できないので、Apple Music Web API または SoundCloud埋め込みは別途)
+  // ここではWeb Audio APIでアンビエントなドローンループを生成して代替
+  startAmbientBGM();
+
+  // 1分アナウンス
+  let mins = 0;
+  minuteTimer = setInterval(() => {
+    mins++;
+    speak(`${mins}分経過`);
+  }, 60000);
+
+  // GPS watch
+  if (navigator.geolocation) {
+    watchId = navigator.geolocation.watchPosition(pos => {
+      if (!isRacing) return;
+      const spd = pos.coords.speed != null && pos.coords.speed >= 0
+        ? pos.coords.speed * 3.6 : null;
+      if (spd !== null) {
+        document.getElementById('stat-speed').innerHTML = spd.toFixed(1) + '<span class="stat-unit">km/h</span>';
+        if (spd > maxSpeed) { maxSpeed = spd; document.getElementById('stat-max').innerHTML = maxSpeed.toFixed(1) + '<span class="stat-unit">km/h</span>'; }
+      }
+      const traveled = nearestProgress(pos.coords.latitude, pos.coords.longitude);
+      traveledM = traveled;
+      const pct = Math.min(100, Math.round(traveled / courseDistM * 100));
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('pct-label').textContent = pct + '%';
+      document.getElementById('stat-moved').innerHTML = fmtDist(traveled) + '';
+      setRemain(Math.max(0, courseDistM - traveled));
+      updateGoalBeep(Math.max(0, courseDistM - traveled));
+      if (pct >= 98) finishRace(false);
+      document.getElementById('gps-dot').classList.add('ok');
+      document.getElementById('gps-label').textContent = 'GPS追跡中';
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 1000 });
+  }
+}
+
+function setRemain(m) {
+  document.getElementById('stat-remain').innerHTML = fmtDist(m);
+}
+
+function nearestProgress(lat, lng) {
+  if (!routeCoords.length) return 0;
+  let minD = Infinity, nearIdx = 0;
+  for (let i = 0; i < routeCoords.length; i++) {
+    const d = haversine(lat, lng, routeCoords[i][0], routeCoords[i][1]);
+    if (d < minD) { minD = d; nearIdx = i; }
+  }
+  let traveled = 0;
+  for (let i = 1; i <= nearIdx; i++) {
+    traveled += haversine(routeCoords[i-1][0], routeCoords[i-1][1], routeCoords[i][0], routeCoords[i][1]);
+  }
+  return Math.min(traveled, courseDistM);
+}
+
+let goal500Announced = false, goal100Announced = false;
+function updateGoalBeep(remain) {
+  if (remain <= 100) {
+    const sec = Math.floor(elapsedMs / 1000);
+    if (sec !== lastBeepSec) { lastBeepSec = sec; playBeep(remain <= 20 ? 1200 : 880); }
+    if (!goal100Announced) { goal100Announced = true; speak('まもなくゴールです'); }
+  } else if (remain <= 500 && !goal500Announced) {
+    goal500Announced = true; speak('ゴールまで500メートルです');
+  }
+}
+
+function finishRace(manual) {
+  isRacing = false; raceFinished = true;
+  cancelAnimationFrame(timerRaf);
+  clearInterval(minuteTimer);
+  if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  stopAmbientBGM();
+
+  document.getElementById('timer').className = 'timer-display finished';
+  document.getElementById('race-status').textContent = manual ? 'レース終了（手動停止）' : 'ゴール！おめでとうございます！';
+  document.getElementById('btn-race').className = 'btn-action done';
+  document.getElementById('btn-race').textContent = 'DONE';
+  document.getElementById('btn-race').disabled = true;
+  if (!manual) { document.getElementById('progress-fill').style.width = '100%'; document.getElementById('pct-label').textContent = '100%'; }
+
+  if (!manual) speak('ゴール！お疲れ様でした！');
+
+  const avg = elapsedMs > 0 ? (traveledM / 1000) / (elapsedMs / 3600000) : 0;
+  records.unshift({ time: elapsedMs, dist: courseDistM, maxSpd: maxSpeed, avgSpd: avg, date: new Date().toLocaleDateString('ja-JP') });
+  records.sort((a,b) => a.time - b.time);
+  records = records.slice(0, 20);
+  localStorage.setItem('ta_records', JSON.stringify(records));
+  setTimeout(() => showTab('records'), 1800);
+}
+
+function resetRace() {
+  isRacing = false; raceFinished = false;
+  cancelAnimationFrame(timerRaf);
+  clearInterval(minuteTimer);
+  if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  stopAmbientBGM();
+  goal500Announced = false; goal100Announced = false; lastBeepSec = -1;
+  elapsedMs = 0; maxSpeed = 0; traveledM = 0;
+  document.getElementById('timer').textContent = '00:00.00';
+  document.getElementById('timer').className = 'timer-display';
+  document.getElementById('race-status').textContent = 'スタートボタンを押してレース開始';
+  document.getElementById('btn-race').className = 'btn-action start';
+  document.getElementById('btn-race').textContent = 'START';
+  document.getElementById('btn-race').disabled = false;
+  document.getElementById('stat-speed').innerHTML = '0.0<span class="stat-unit">km/h</span>';
+  document.getElementById('stat-max').innerHTML = '0.0<span class="stat-unit">km/h</span>';
+  document.getElementById('stat-moved').innerHTML = '0<span class="stat-unit">m</span>';
+  document.getElementById('stat-remain').innerHTML = '—';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('pct-label').textContent = '0%';
+}
+
+// ===================== RECORDS =====================
+function renderRecords() {
+  const el = document.getElementById('records-list');
+  if (!records.length) {
+    el.innerHTML = '<div class="no-records">まだ記録がありません<br>レースを完了すると<br>ここに記録が表示されます</div>';
+    return;
+  }
+  const medals = ['🥇','🥈','🥉'];
+  const cls = ['gold','silver','bronze'];
+  el.innerHTML = records.map((r,i) => `
+    <div class="record-item ${cls[i]||''}">
+      <div class="record-rank">${medals[i] || (i+1)+'.'}</div>
+      <div class="record-info">
+        <div class="record-date">${r.date}</div>
+        <div class="record-dist">${fmtDist(r.dist)} · 最高 ${r.maxSpd.toFixed(1)} km/h</div>
+      </div>
+      <div class="record-right">
+        <div class="record-time">${fmtTime(r.time)}</div>
+        <div class="record-speed">平均 ${r.avgSpd.toFixed(1)} km/h</div>
+      </div>
+    </div>`).join('');
+}
+
+// ===================== SOUND =====================
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  return audioCtx;
+}
+
+function speak(text, onEnd) {
+  if (!synth) { onEnd && onEnd(); return; }
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ja-JP'; u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
+  // 日本語音声を優先
+  const voices = synth.getVoices().filter(v => v.lang.startsWith('ja'));
+  if (voices.length) u.voice = voices[0];
+  if (onEnd) u.onend = onEnd;
+  synth.speak(u);
+}
+
+function playBeep(freq = 880) {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start(); osc.stop(ctx.currentTime + 0.15);
+  } catch(e) {}
+}
+
+// アンビエントBGM（Web Audio APIで生成するドローンループ）
+let bgmNodes = [];
+function startAmbientBGM() {
+  try {
+    const ctx = getAudioCtx();
+    // 低音ドローン + ハイハット的なリズム
+    const freqs = [55, 110, 165, 220];
+    freqs.forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = i === 0 ? 'sawtooth' : 'sine';
+      osc.frequency.value = f;
+      gain.gain.value = i === 0 ? 0.04 : 0.015;
+      osc.start();
+      bgmNodes.push(osc, gain);
+    });
+  } catch(e) {}
+}
+function stopAmbientBGM() {
+  bgmNodes.forEach(n => { try { n.stop && n.stop(); n.disconnect && n.disconnect(); } catch(e){} });
+  bgmNodes = [];
+}
+
+// ===================== UTILS =====================
+function fmtTime(ms) {
+  const m  = Math.floor(ms / 60000);
+  const s  = Math.floor((ms % 60000) / 1000);
+  const cs = Math.floor((ms % 1000) / 10);
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
+}
+function fmtDist(m) {
+  return m >= 1000 ? (m/1000).toFixed(2) + ' km' : Math.round(m) + ' m';
+}
+function fmtDuration(sec) {
+  const m = Math.floor(sec/60), s = Math.round(sec%60);
+  return m > 0 ? `${m}分${s > 0 ? s+'秒' : ''}` : `${s}秒`;
+}
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// 音声読み込み待ち
+if (synth) {
+  synth.getVoices();
+  synth.addEventListener('voiceschanged', () => synth.getVoices());
+}
+</script>
+</body>
+</html>
