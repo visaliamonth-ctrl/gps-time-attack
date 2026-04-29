@@ -196,7 +196,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   <div class="hdr">
     <div class="hdr-left">
       <div class="hdr-title">TIME ATTACK</div>
-      <div class="hdr-ver">v1.6.2</div>
+      <div class="hdr-ver">v1.6.3</div>
     </div>
     <div class="gps-badge">
       <div class="gps-dot" id="gps-dot"></div>
@@ -368,7 +368,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const VERSION = 'v1.6.2';
+const VERSION = 'v1.6.3';
 
 // ===== STATE =====
 let map, raceMap, startMarker, goalMarker, routeLayer;
@@ -380,6 +380,7 @@ let courseDistM = 0, routeCoords = [], estDurSec = 0, straightDistM = 0, roadNam
 let isRacing = false, raceFinished = false;
 let raceMode = 'normal'; // 'normal' | 'rolling'
 let rollingWaiting = false, rollingWatchId = null;
+let raceMapWatchId = null;
 let startTime = null, elapsedMs = 0;
 let maxSpeed = 0, traveledM = 0;
 let watchId = null, timerRaf = null, minuteTimer = null;
@@ -431,6 +432,40 @@ function initRaceMap() {
     if (startLL) raceStartMarker = L.marker(startLL, { icon: makeIcon('#00ff88', 'S'), zIndexOffset: 200 }).addTo(raceMap);
     if (goalLL)  raceGoalMarker  = L.marker(goalLL,  { icon: makeIcon('#ff3d6b', 'G'), zIndexOffset: 200 }).addTo(raceMap);
     raceMap.fitBounds(raceRouteLayer.getBounds(), { padding: [28, 28] });
+  }
+}
+
+// レース画面で常時現在地を表示するwatch（レース前・ローリング待機中も動く）
+function startRaceMapWatch() {
+  if (!navigator.geolocation) return;
+  if (raceMapWatchId != null) return; // 既に起動中
+  raceMapWatchId = navigator.geolocation.watchPosition(pos => {
+    if (!raceMap) return;
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    // 現在地マーカー更新
+    if (!raceLocMarker) {
+      raceLocMarker = L.marker(ll, { icon: L.divIcon({
+        className: '',
+        html: `<div style="position:relative;width:22px;height:22px">
+          <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,229,255,0.25);animation:pulse 1.5s infinite"></div>
+          <div style="position:absolute;inset:3px;border-radius:50%;background:#00e5ff;border:2.5px solid #fff;box-shadow:0 0 10px rgba(0,229,255,0.9)"></div>
+        </div>`,
+        iconSize: [22,22], iconAnchor: [11,11]
+      }), zIndexOffset: 600 }).addTo(raceMap);
+    } else {
+      raceLocMarker.setLatLng(ll);
+    }
+    // レース中でない（待機中・ローリング待機）は現在地中心に表示
+    if (!isRacing) {
+      raceMap.setView(ll, raceMap.getZoom() < 14 ? 15 : raceMap.getZoom(), { animate: true, duration: 0.5 });
+    }
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 1000 });
+}
+
+function stopRaceMapWatch() {
+  if (raceMapWatchId != null) {
+    navigator.geolocation.clearWatch(raceMapWatchId);
+    raceMapWatchId = null;
   }
 }
 
@@ -628,7 +663,13 @@ function showTab(name) {
   document.getElementById(sid).classList.add('active');
   document.getElementById(tid).classList.add('active');
   if (name === 'setup') setTimeout(() => map && map.invalidateSize(), 80);
-  if (name === 'race') { setTimeout(() => { initRaceMap(); raceMap && raceMap.invalidateSize(); }, 80); }
+  if (name === 'race') {
+    setTimeout(() => {
+      initRaceMap();
+      raceMap && raceMap.invalidateSize();
+      startRaceMapWatch(); // レース前から現在地を表示
+    }, 80);
+  }
   if (name === 'records') renderRecords();
 }
 
@@ -796,22 +837,10 @@ function beginRace() {
       document.getElementById('stat-remain').innerHTML = fmtDist(remain);
       updateGoalAlerts(remain);
 
-      // レース中地図：現在地マーカー更新
+      // レース中地図：現在地マーカー更新（raceMapWatchが既に動いているので追従のみ）
       if (raceMap) {
         const ll = [pos.coords.latitude, pos.coords.longitude];
-        if (!raceLocMarker) {
-          raceLocMarker = L.marker(ll, { icon: L.divIcon({
-            className: '',
-            html: `<div style="position:relative;width:22px;height:22px">
-              <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,229,255,0.25);animation:pulse 1.5s infinite"></div>
-              <div style="position:absolute;inset:3px;border-radius:50%;background:#00e5ff;border:2.5px solid #fff;box-shadow:0 0 10px rgba(0,229,255,0.9)"></div>
-            </div>`,
-            iconSize:[22,22], iconAnchor:[11,11]
-          }), zIndexOffset:600 }).addTo(raceMap);
-        } else {
-          raceLocMarker.setLatLng(ll);
-        }
-        // 現在地を中心に、コース全体が見えるズームを維持
+        if (raceLocMarker) raceLocMarker.setLatLng(ll);
         raceMap.setView(ll, raceMap.getZoom() < 14 ? 15 : raceMap.getZoom(), { animate: true, duration: 0.5 });
       }
 
@@ -827,16 +856,33 @@ function beginRace() {
 
 function updateGoalAlerts(remain) {
   if (remain <= 100) {
-    // 1秒ごとにビープ（setTimeoutで確実に鳴らす）
     const sec = Math.floor(elapsedMs / 1000);
     if (sec !== lastBeepSec) {
       lastBeepSec = sec;
-      playBeep(remain <= 20 ? 1200 : 880);
+      // 残り距離に応じて音を変える：遠め=低く短く、近め=高く
+      playGoalBeep(remain);
     }
     if (!goal100Done) { goal100Done = true; speak('まもなくゴールです'); }
   } else if (remain <= 500 && !goal500Done) {
     goal500Done = true; speak('ゴールまで500メートルです');
   }
+}
+
+function playGoalBeep(remain) {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    // 残りが少ないほど高音・長め
+    osc.frequency.value = remain <= 30 ? 1400 : remain <= 60 ? 1100 : 800;
+    const dur = remain <= 30 ? 0.22 : 0.15;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + dur);
+  } catch(e) {}
 }
 
 function nearestProgress(lat, lng) {
