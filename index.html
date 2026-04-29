@@ -10,285 +10,232 @@
 <link rel="manifest" href="manifest.json">
 <title>GPS タイムアタック</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0a0a14;
-  --surface: #12121f;
-  --surface2: #1a1a2e;
-  --border: rgba(255,255,255,0.08);
-  --accent: #00e5ff;
-  --accent2: #ff3d6b;
-  --green: #00ff88;
-  --text: #e8e8ff;
-  --muted: rgba(232,232,255,0.45);
-  --font-display: 'Rajdhani', sans-serif;
-  --font-body: 'Noto Sans JP', sans-serif;
+  --bg:#0a0a14; --surface:#12121f; --surface2:#1c1c2e;
+  --border:rgba(255,255,255,0.09); --accent:#00e5ff; --red:#ff3d6b; --green:#00ff88;
+  --text:#e8e8ff; --muted:rgba(232,232,255,0.42);
+  --fd:'Rajdhani',sans-serif; --fb:'Noto Sans JP',sans-serif;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-body); }
-
-/* APP SHELL */
-#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--fb)}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
 
 /* HEADER */
-.header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 16px;
-  display: flex; align-items: center; justify-content: space-between;
-  flex-shrink: 0;
-}
-.header-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; letter-spacing: 2px; color: var(--accent); }
-.header-version { font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
-.gps-badge {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; color: var(--muted);
-  background: rgba(255,255,255,0.04);
-  padding: 4px 10px; border-radius: 20px;
-  border: 1px solid var(--border);
-}
-.gps-dot { width: 7px; height: 7px; border-radius: 50%; background: #f39c12; }
-.gps-dot.ok { background: var(--green); animation: pulse 1.5s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hdr-left{}
+.hdr-title{font-family:var(--fd);font-size:18px;font-weight:700;letter-spacing:2px;color:var(--accent)}
+.hdr-ver{font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:1px}
+.gps-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:rgba(255,255,255,0.04);padding:4px 9px;border-radius:20px;border:1px solid var(--border)}
+.gps-dot{width:7px;height:7px;border-radius:50%;background:#f39c12}
+.gps-dot.ok{background:var(--green);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
 
 /* TABS */
-.tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.tab {
-  flex: 1; padding: 11px 0; text-align: center; font-size: 12px;
-  color: var(--muted); cursor: pointer; position: relative;
-  font-family: var(--font-body); letter-spacing: 0.5px;
-  transition: color 0.2s;
-}
-.tab::after { content:''; position:absolute; bottom:0; left:20%; right:20%; height:2px; background:var(--accent); transform:scaleX(0); transition:transform 0.2s; border-radius:2px; }
-.tab.active { color: var(--accent); }
-.tab.active::after { transform:scaleX(1); }
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:10px 0;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;position:relative;transition:color 0.2s}
+.tab::after{content:'';position:absolute;bottom:0;left:20%;right:20%;height:2px;background:var(--accent);transform:scaleX(0);transition:transform 0.2s;border-radius:2px}
+.tab.active{color:var(--accent)}
+.tab.active::after{transform:scaleX(1)}
 
 /* SCREENS */
-.screens { flex: 1; overflow: hidden; position: relative; }
-.screen { position: absolute; inset: 0; overflow-y: auto; display: none; -webkit-overflow-scrolling: touch; }
-.screen.active { display: block; }
+.screens{flex:1;overflow:hidden;position:relative}
+.screen{position:absolute;inset:0;overflow-y:auto;display:none;-webkit-overflow-scrolling:touch}
+.screen.active{display:block}
 
-/* MAP */
-#map { width: 100%; height: 240px; position: relative; }
-.leaflet-container { background: #1a2535; }
-#locate-btn {
-  position: absolute; top: 10px; right: 10px; z-index: 1000;
-  width: 36px; height: 36px; border-radius: 8px;
-  background: var(--surface); border: 1px solid var(--border);
-  color: var(--accent); font-size: 18px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-}
-#locate-btn.locating { animation: pulse 1s infinite; }
+/* ===== SETUP ===== */
+#map{width:100%;height:260px;position:relative}
+.leaflet-container{background:#1a2535}
+#locate-btn{position:absolute;top:10px;right:10px;z-index:1000;width:38px;height:38px;border-radius:9px;background:var(--surface);border:1px solid var(--border);color:var(--accent);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.5)}
 
-/* SETUP */
-.setup-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.hint-bar {
-  display: flex; align-items: center; gap: 8px;
-  background: rgba(0,229,255,0.06); border: 1px solid rgba(0,229,255,0.2);
-  border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--accent);
-}
-.hint-icon { font-size: 16px; flex-shrink: 0; }
-.hint-reset { margin-left: auto; font-size: 11px; color: var(--muted); background: none; border: none; cursor: pointer; color: var(--accent2); }
+.setup-body{padding:12px;display:flex;flex-direction:column;gap:10px}
+.hint-bar{display:flex;align-items:center;gap:8px;background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.18);border-radius:10px;padding:9px 12px;font-size:12px;color:var(--accent)}
+.hint-icon{font-size:15px;flex-shrink:0}
+.hint-reset{margin-left:auto;font-size:11px;background:none;border:none;cursor:pointer;color:var(--red)}
+.pts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pt-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px}
+.pt-head{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.mbadge{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+.ms{background:#00ff88;color:#002a18}.mg{background:#ff3d6b;color:#2a0010}
+.pt-label{font-size:10px;color:var(--muted)}
+.pt-coords{font-family:monospace;font-size:10px;color:var(--text);line-height:1.6}
+.route-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;align-items:center}
+.rdiv{background:var(--border);height:28px}
+.ri{text-align:center}
+.ri-label{font-size:10px;color:var(--muted);margin-bottom:2px}
+.ri-val{font-family:var(--fd);font-size:15px;font-weight:700}
+.route-fetch{text-align:center;padding:12px;color:var(--muted);font-size:12px}
+.route-err{color:var(--red);font-size:12px;padding:9px 12px;background:rgba(255,61,107,0.08);border-radius:8px;border:1px solid rgba(255,61,107,0.2)}
+.btn-pri{width:100%;padding:14px;background:var(--accent);border:none;border-radius:12px;font-family:var(--fd);font-size:18px;font-weight:700;color:#001a20;cursor:pointer;letter-spacing:1px;transition:opacity 0.2s}
+.btn-pri:disabled{opacity:0.3;cursor:default}
 
-.points-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.point-card {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 10px;
-}
-.point-card-header { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
-.marker-badge {
-  width: 22px; height: 22px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700;
-}
-.marker-s { background: #00ff88; color: #002a18; }
-.marker-g { background: #ff3d6b; color: #2a0010; }
-.point-label { font-size: 11px; color: var(--muted); }
-.point-coords { font-family: monospace; font-size: 11px; color: var(--text); line-height: 1.6; }
+/* コース保存 */
+.courses-section{background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.courses-header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
+.courses-title{font-size:12px;font-weight:500;color:var(--text)}
+.btn-save-course{font-size:11px;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);color:var(--accent);padding:4px 10px;border-radius:6px;cursor:pointer}
+.btn-save-course:disabled{opacity:0.3;cursor:default}
+.course-list{max-height:160px;overflow-y:auto}
+.course-item{display:flex;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);gap:8px;cursor:pointer;transition:background 0.15s}
+.course-item:last-child{border-bottom:none}
+.course-item:hover{background:rgba(255,255,255,0.04)}
+.course-item-name{flex:1;font-size:12px;color:var(--text)}
+.course-item-dist{font-size:11px;color:var(--muted)}
+.course-item-del{font-size:16px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1}
+.no-courses{padding:14px;text-align:center;font-size:12px;color:var(--muted)}
 
-.route-card {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 12px;
-  display: grid; grid-template-columns: 1fr 1px 1fr 1px 1fr;
-  align-items: center; gap: 0;
-}
-.route-divider { background: var(--border); height: 32px; }
-.route-item { text-align: center; }
-.route-item-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
-.route-item-value { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--text); }
+/* ===== RACE ===== */
+.race-body{padding:12px;display:flex;flex-direction:column;gap:12px}
 
-.route-fetching { text-align: center; padding: 14px; color: var(--muted); font-size: 13px; }
-.route-error { color: var(--accent2); font-size: 12px; padding: 10px 12px; background: rgba(255,61,107,0.08); border-radius: 8px; border: 1px solid rgba(255,61,107,0.2); }
+/* 地図（レース中） */
+#race-map{width:100%;height:200px;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
 
-.btn-primary {
-  width: 100%; padding: 14px;
-  background: linear-gradient(135deg, #00c8e0, #00e5ff);
-  border: none; border-radius: 12px;
-  font-family: var(--font-display); font-size: 18px; font-weight: 700;
-  color: #001a20; cursor: pointer; letter-spacing: 1px;
-  transition: opacity 0.2s, transform 0.1s;
-}
-.btn-primary:disabled { opacity: 0.3; cursor: default; }
-.btn-primary:active:not(:disabled) { transform: scale(0.98); }
+/* タイマー大表示 */
+.timer-block{text-align:center;padding:8px 0 4px}
+.timer-status{font-size:11px;color:var(--muted);margin-bottom:4px;letter-spacing:1px}
+.timer-display{font-family:var(--fd);font-size:72px;font-weight:700;letter-spacing:3px;color:var(--text);line-height:1;transition:color 0.3s}
+.timer-display.running{color:var(--accent)}
+.timer-display.finished{color:var(--green)}
 
-/* RACE */
-.race-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+/* 大きな統計カード */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 10px;text-align:center}
+.stat-label{font-size:10px;color:var(--muted);margin-bottom:6px;letter-spacing:0.5px}
+.stat-value{font-family:var(--fd);font-size:28px;font-weight:700;color:var(--text);line-height:1}
+.stat-unit{font-size:12px;color:var(--muted);margin-left:2px}
+/* 残り距離カードは強調 */
+.stat-card.remain{border-color:rgba(0,229,255,0.25);background:rgba(0,229,255,0.05)}
+.stat-card.remain .stat-value{color:var(--accent)}
 
-.timer-block { text-align: center; padding: 10px 0; }
-.timer-status { font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: 1px; }
-.timer-display {
-  font-family: var(--font-display); font-size: 62px; font-weight: 700;
-  letter-spacing: 3px; color: var(--text); line-height: 1;
-  transition: color 0.3s;
-}
-.timer-display.running { color: var(--accent); text-shadow: 0 0 30px rgba(0,229,255,0.4); }
-.timer-display.finished { color: var(--green); text-shadow: 0 0 30px rgba(0,255,136,0.4); }
+/* プログレス */
+.prog-wrap{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.prog-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:8px}
+.prog-pct{font-family:var(--fd);font-size:13px;font-weight:700;color:var(--accent)}
+.prog-track{height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,#00c8e0,#00ff88);border-radius:4px;transition:width 0.5s;width:0%}
 
-.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.stat-card {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 12px; text-align: center;
-}
-.stat-label { font-size: 10px; color: var(--muted); margin-bottom: 5px; letter-spacing: 0.5px; }
-.stat-value { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--text); }
-.stat-unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
+/* ボタン */
+.race-btns{display:grid;grid-template-columns:2fr 1fr;gap:8px}
+.btn-act{padding:16px;border-radius:12px;border:none;font-family:var(--fd);font-size:22px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all 0.15s}
+.btn-act.start{background:var(--accent);color:#001a20}
+.btn-act.stop{background:var(--red);color:#fff}
+.btn-act.done{background:var(--surface2);color:var(--muted);cursor:default}
+.btn-act:disabled{opacity:0.4;cursor:default}
+.btn-sec{padding:16px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);font-family:var(--fb);font-size:13px;color:var(--muted);cursor:pointer}
 
-.progress-block {}
-.progress-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
-.progress-track {
-  height: 6px; background: var(--surface2);
-  border-radius: 3px; overflow: hidden;
-  border: 1px solid var(--border);
-}
-.progress-fill { height: 100%; background: linear-gradient(90deg, #00c8e0, #00ff88); border-radius: 3px; transition: width 0.4s; width: 0%; }
+/* ===== RECORDS ===== */
+.rec-body{padding:12px;display:flex;flex-direction:column;gap:8px}
+.rec-toolbar{display:flex;justify-content:flex-end;gap:8px}
+.btn-del-all{font-size:11px;background:rgba(255,61,107,0.1);border:1px solid rgba(255,61,107,0.3);color:var(--red);padding:5px 12px;border-radius:6px;cursor:pointer}
+.no-records{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px;line-height:2.2}
+.rec-item{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px}
+.rec-item.gold{border-color:rgba(240,192,64,0.4)}
+.rec-item.silver{border-color:rgba(180,180,180,0.3)}
+.rec-item.bronze{border-color:rgba(180,100,50,0.3)}
+.rec-rank{font-size:22px;width:26px;text-align:center;flex-shrink:0}
+.rec-info{flex:1;min-width:0}
+.rec-date{font-size:11px;color:var(--muted)}
+.rec-dist{font-size:11px;color:var(--muted);margin-top:2px}
+.rec-right{text-align:right;flex-shrink:0}
+.rec-time{font-family:var(--fd);font-size:26px;font-weight:700;color:var(--text)}
+.rec-speed{font-size:11px;color:var(--muted);margin-top:2px}
+.rec-del{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0}
+.rec-num{font-family:var(--fd);font-size:18px;font-weight:700;color:var(--muted);width:32px;text-align:center;flex-shrink:0}
+.rec-new{font-size:10px;background:rgba(0,229,255,0.15);color:var(--accent);border:1px solid rgba(0,229,255,0.3);padding:2px 6px;border-radius:6px;letter-spacing:1px}
 
-.race-btns { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
-.btn-action {
-  padding: 14px; border-radius: 12px; border: none;
-  font-family: var(--font-display); font-size: 18px; font-weight: 700;
-  letter-spacing: 1px; cursor: pointer; transition: all 0.2s;
-}
-.btn-action.start { background: linear-gradient(135deg, #00c8e0, #00e5ff); color: #001a20; }
-.btn-action.stop  { background: linear-gradient(135deg, #ff2d55, #ff3d6b); color: #fff; }
-.btn-action.done  { background: var(--surface2); color: var(--muted); cursor: default; }
-.btn-action:disabled { opacity: 0.4; cursor: default; }
-.btn-secondary {
-  padding: 14px; border-radius: 12px;
-  background: var(--surface2); border: 1px solid var(--border);
-  font-family: var(--font-body); font-size: 13px; color: var(--muted);
-  cursor: pointer; transition: all 0.2s;
-}
-.btn-secondary:active { opacity: 0.7; }
-
-/* COUNTDOWN OVERLAY */
-#countdown-overlay {
-  position: fixed; inset: 0; z-index: 999;
-  background: rgba(10,10,20,0.92);
-  display: none; flex-direction: column;
-  align-items: center; justify-content: center; gap: 20px;
-  backdrop-filter: blur(8px);
-}
-#countdown-overlay.show { display: flex; }
-.cd-label { font-size: 14px; color: var(--muted); letter-spacing: 2px; font-family: var(--font-display); }
-.cd-ring-wrap { position: relative; width: 160px; height: 160px; }
-.cd-ring-svg { width: 160px; height: 160px; transform: rotate(-90deg); }
-.cd-ring-bg { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 6; }
-.cd-ring-fg { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 440; stroke-dashoffset: 0; transition: stroke-dashoffset 0.5s ease; }
-.cd-number {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display); font-size: 80px; font-weight: 700; color: #fff;
-  transition: transform 0.15s ease-out, opacity 0.15s;
-}
-.cd-go { font-size: 52px; color: var(--green); }
-.cd-hint { font-size: 13px; color: var(--muted); }
-
-/* RECORDS */
-.records-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.no-records { text-align: center; padding: 50px 20px; color: var(--muted); font-size: 13px; line-height: 2; }
-.record-item {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 12px; padding: 14px;
-  display: flex; align-items: center; gap: 12px;
-}
-.record-item.gold   { border-color: rgba(240,192,64,0.4); }
-.record-item.silver { border-color: rgba(180,180,180,0.3); }
-.record-item.bronze { border-color: rgba(180,100,50,0.3); }
-.record-rank { font-size: 24px; width: 28px; text-align: center; flex-shrink: 0; }
-.record-info { flex: 1; min-width: 0; }
-.record-date { font-size: 11px; color: var(--muted); }
-.record-dist { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.record-right { text-align: right; flex-shrink: 0; }
-.record-time { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--text); }
-.record-speed { font-size: 11px; color: var(--muted); margin-top: 2px; }
+/* COUNTDOWN */
+#cd-overlay{position:fixed;inset:0;z-index:999;background:rgba(10,10,20,0.93);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+#cd-overlay.show{display:flex}
+.cd-label{font-size:13px;color:var(--muted);letter-spacing:2px;font-family:var(--fd)}
+.cd-ring-wrap{position:relative;width:170px;height:170px}
+.cd-svg{width:170px;height:170px;transform:rotate(-90deg)}
+.cd-bg{fill:none;stroke:rgba(255,255,255,0.06);stroke-width:7}
+.cd-fg{fill:none;stroke:var(--accent);stroke-width:7;stroke-linecap:round;stroke-dasharray:471;stroke-dashoffset:0;transition:stroke-dashoffset 0.4s ease}
+.cd-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:88px;font-weight:700;color:#fff;line-height:1}
+.cd-num.go{font-size:56px;color:var(--green)}
+.cd-hint{font-size:12px;color:var(--muted)}
 
 /* SPINNER */
-.spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.spin{display:inline-block;width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-/* Leaflet overrides */
-.leaflet-control-zoom a { background: var(--surface2) !important; color: var(--text) !important; border-color: var(--border) !important; }
+/* SAVE COURSE MODAL */
+#save-modal{position:fixed;inset:0;z-index:998;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;padding:20px}
+#save-modal.show{display:flex}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;width:100%;max-width:340px}
+.modal-title{font-size:14px;font-weight:500;margin-bottom:12px}
+.modal-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:var(--fb);outline:none}
+.modal-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.modal-btn{padding:11px;border-radius:8px;font-size:13px;cursor:pointer;border:none;font-family:var(--fb)}
+.modal-ok{background:var(--accent);color:#001a20;font-weight:500}
+.modal-cancel{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+
+.leaflet-control-zoom a{background:var(--surface2)!important;color:var(--text)!important;border-color:var(--border)!important}
 </style>
 </head>
 <body>
 <div id="app">
-  <div class="header">
-    <div>
-      <div class="header-title">TIME ATTACK</div>
-      <div class="header-version">v1.3.0</div>
+  <div class="hdr">
+    <div class="hdr-left">
+      <div class="hdr-title">TIME ATTACK</div>
+      <div class="hdr-ver">v1.5.1</div>
     </div>
     <div class="gps-badge">
       <div class="gps-dot" id="gps-dot"></div>
       <span id="gps-label">GPS待機中</span>
     </div>
   </div>
-
   <div class="tabs">
     <div class="tab active" id="tab-setup" onclick="showTab('setup')">コース設定</div>
-    <div class="tab" id="tab-race"  onclick="showTab('race')">レース</div>
-    <div class="tab" id="tab-rec"   onclick="showTab('records')">記録</div>
+    <div class="tab" id="tab-race" onclick="showTab('race')">レース</div>
+    <div class="tab" id="tab-rec" onclick="showTab('records')">記録</div>
   </div>
-
   <div class="screens">
 
     <!-- SETUP -->
     <div class="screen active" id="screen-setup">
-      <div id="map"></div><button id="locate-btn" onclick="locateMe()" title="現在地">◎</button>
+      <div id="map"></div>
+      <button id="locate-btn" onclick="locateMe()" title="現在地">◎</button>
       <div class="setup-body">
         <div class="hint-bar">
           <span class="hint-icon" id="hint-icon">📍</span>
           <span id="hint-text">地図をタップしてスタート地点を設定</span>
-          <button class="hint-reset" id="btn-reset-course" onclick="resetCourse()" style="display:none">リセット</button>
+          <button class="hint-reset" id="btn-reset" onclick="resetCourse()" style="display:none">リセット</button>
         </div>
-
-        <div class="points-row">
-          <div class="point-card">
-            <div class="point-card-header">
-              <div class="marker-badge marker-s">S</div>
-              <span class="point-label">スタート</span>
-            </div>
-            <div class="point-coords" id="start-coords">未設定</div>
+        <div class="pts">
+          <div class="pt-card">
+            <div class="pt-head"><div class="mbadge ms">S</div><span class="pt-label">スタート</span></div>
+            <div class="pt-coords" id="start-coords">未設定</div>
           </div>
-          <div class="point-card">
-            <div class="point-card-header">
-              <div class="marker-badge marker-g">G</div>
-              <span class="point-label">ゴール</span>
-            </div>
-            <div class="point-coords" id="goal-coords">未設定</div>
+          <div class="pt-card">
+            <div class="pt-head"><div class="mbadge mg">G</div><span class="pt-label">ゴール</span></div>
+            <div class="pt-coords" id="goal-coords">未設定</div>
           </div>
         </div>
-
         <div id="route-status"></div>
 
-        <button class="btn-primary" id="btn-go" disabled onclick="showTab('race')">レーススタートへ →</button>
+        <!-- コース保存・選択 -->
+        <div class="courses-section">
+          <div class="courses-header">
+            <span class="courses-title">保存済みコース</span>
+            <button class="btn-save-course" id="btn-save" onclick="openSaveModal()" disabled>現在のコースを保存</button>
+          </div>
+          <div class="course-list" id="course-list">
+            <div class="no-courses">保存済みコースはありません</div>
+          </div>
+        </div>
+
+        <button class="btn-pri" id="btn-go" disabled onclick="showTab('race')">レーススタートへ →</button>
       </div>
     </div>
 
     <!-- RACE -->
     <div class="screen" id="screen-race">
       <div class="race-body">
+        <!-- レース中地図 -->
+        <div id="race-map"></div>
+
         <div class="timer-block">
           <div class="timer-status" id="race-status">スタートボタンを押してレース開始</div>
           <div class="timer-display" id="timer">00:00.00</div>
@@ -307,102 +254,141 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
             <div class="stat-label">移動距離</div>
             <div class="stat-value" id="stat-moved">0<span class="stat-unit">m</span></div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">残り距離</div>
+          <div class="stat-card remain">
+            <div class="stat-label">ゴールまで</div>
             <div class="stat-value" id="stat-remain">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">平均速度</div>
+            <div class="stat-value" id="stat-avg">0.0<span class="stat-unit">km/h</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">経過時間</div>
+            <div class="stat-value" id="stat-elapsed">00:00</div>
           </div>
         </div>
 
-        <div class="progress-block">
-          <div class="progress-labels">
+        <div class="prog-wrap">
+          <div class="prog-labels">
             <span>スタート</span>
-            <span id="pct-label">0%</span>
+            <span class="prog-pct" id="pct-label">0%</span>
             <span>ゴール</span>
           </div>
-          <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+          <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
         </div>
 
         <div class="race-btns">
-          <button class="btn-action start" id="btn-race" onclick="raceAction()">START</button>
-          <button class="btn-secondary" onclick="resetRace()">リセット</button>
+          <button class="btn-act start" id="btn-race" onclick="raceAction()">START</button>
+          <button class="btn-sec" onclick="resetRace()">リセット</button>
         </div>
       </div>
     </div>
 
     <!-- RECORDS -->
     <div class="screen" id="screen-records">
-      <div class="records-body" id="records-list">
-        <div class="no-records">まだ記録がありません<br>レースを完了すると<br>ここに記録が表示されます</div>
+      <div class="rec-body">
+        <div class="rec-toolbar">
+          <button class="btn-del-all" onclick="deleteAllRecords()">全て削除</button>
+        </div>
+        <div id="records-list">
+          <div class="no-records">まだ記録がありません<br>ゴールすると記録が表示されます</div>
+        </div>
       </div>
     </div>
 
   </div>
 </div>
 
-<!-- COUNTDOWN OVERLAY -->
-<div id="countdown-overlay">
+<!-- COUNTDOWN -->
+<div id="cd-overlay">
   <div class="cd-label">スタートまで</div>
   <div class="cd-ring-wrap">
-    <svg class="cd-ring-svg" viewBox="0 0 160 160">
-      <circle class="cd-ring-bg" cx="80" cy="80" r="70"/>
-      <circle class="cd-ring-fg" id="cd-ring" cx="80" cy="80" r="70"/>
+    <svg class="cd-svg" viewBox="0 0 170 170">
+      <circle class="cd-bg" cx="85" cy="85" r="75"/>
+      <circle class="cd-fg" id="cd-ring" cx="85" cy="85" r="75"/>
     </svg>
-    <div class="cd-number" id="cd-number">5</div>
+    <div class="cd-num" id="cd-num">5</div>
   </div>
   <div class="cd-hint">移動の準備をしてください</div>
 </div>
 
+<!-- SAVE MODAL -->
+<div id="save-modal">
+  <div class="modal-box">
+    <div class="modal-title">コース名を入力</div>
+    <input class="modal-input" id="course-name-input" type="text" placeholder="例：自宅〜駅" maxlength="20">
+    <div class="modal-btns">
+      <button class="modal-btn modal-cancel" onclick="closeSaveModal()">キャンセル</button>
+      <button class="modal-btn modal-ok" onclick="saveCourse()">保存</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ===================== STATE =====================
-let map, startMarker, goalMarker, routeLayer, myLocMarker, myLocCircle;
-let startLL = null, goalLL = null;
-let setupStep = 0; // 0=start, 1=goal, 2=done
-let courseDistM = 0, routeCoords = [];
-let straightDistM = 0, estDurSec = 0;
+const VERSION = 'v1.5.1';
 
+// ===== STATE =====
+let map, raceMap, startMarker, goalMarker, routeLayer;
+let raceRouteLayer, raceLocMarker, raceGoalMarker;
+let myLocMarker, myLocCircle;
+let startLL = null, goalLL = null;
+let setupStep = 0;
+let courseDistM = 0, routeCoords = [], estDurSec = 0, straightDistM = 0;
 let isRacing = false, raceFinished = false;
 let startTime = null, elapsedMs = 0;
 let maxSpeed = 0, traveledM = 0;
-let watchId = null, timerRaf = null;
-let records = JSON.parse(localStorage.getItem('ta_records') || '[]');
+let watchId = null, timerRaf = null, minuteTimer = null;
+let lastBeepSec = -1, goal500Done = false, goal100Done = false;
+let beepInterval = null;
 
-// Sound
+let records = JSON.parse(localStorage.getItem('ta_records') || '[]');
+let savedCourses = JSON.parse(localStorage.getItem('ta_courses') || '[]');
+
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
-let synth = window.speechSynthesis;
-let minuteTimer = null, goalAnnouncedAt = null;
-let lastBeepSec = -1;
+const synth = window.speechSynthesis;
 
-// ===================== INIT =====================
+// ===== INIT =====
 window.addEventListener('load', () => {
   initMap();
   initGPS();
+  renderCourseList();
+  if (synth) { synth.getVoices(); synth.addEventListener('voiceschanged', () => synth.getVoices()); }
 });
 
-// ===================== MAP =====================
+// ===== MAP =====
 function initMap() {
   map = L.map('map', { zoomControl: true, attributionControl: false });
-  // CartoDB Voyager - 高品質・無料・APIキー不要
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 20, subdomains: 'abcd'
   }).addTo(map);
   map.on('click', onMapClick);
+  navigator.geolocation
+    ? navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 16), () => map.setView([35.68, 139.69], 14))
+    : map.setView([35.68, 139.69], 14);
+}
 
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(p => {
-      map.setView([p.coords.latitude, p.coords.longitude], 16);
-    }, () => map.setView([35.68, 139.69], 14));
-  } else {
-    map.setView([35.68, 139.69], 14);
+function initRaceMap() {
+  if (raceMap) return;
+  raceMap = L.map('race-map', { zoomControl: false, attributionControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20, subdomains: 'abcd'
+  }).addTo(raceMap);
+  if (routeCoords.length) {
+    raceRouteLayer = L.polyline(routeCoords, { color: '#00e5ff', weight: 5, opacity: 0.8 }).addTo(raceMap);
+    raceMap.fitBounds(raceRouteLayer.getBounds(), { padding: [20, 20] });
+    if (goalLL) {
+      raceGoalMarker = L.marker(goalLL, { icon: makeIcon('#ff3d6b', 'G'), zIndexOffset: 200 }).addTo(raceMap);
+    }
   }
 }
 
 function makeIcon(color, label) {
   return L.divIcon({
     className: '',
-    html: `<div style="width:30px;height:30px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#001a20;border:2px solid rgba(255,255,255,0.8);box-shadow:0 2px 8px rgba(0,0,0,0.5)">${label}</div>`,
-    iconSize: [30,30], iconAnchor: [15,15]
+    html: `<div style="width:28px;height:28px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;border:2px solid rgba(255,255,255,0.8);box-shadow:0 2px 8px rgba(0,0,0,0.5)">${label}</div>`,
+    iconSize: [28, 28], iconAnchor: [14, 14]
   });
 }
 
@@ -410,48 +396,48 @@ function onMapClick(e) {
   const ll = e.latlng;
   if (setupStep === 0) {
     if (startMarker) map.removeLayer(startMarker);
-    startMarker = L.marker(ll, { icon: makeIcon('#00ff88','S') }).addTo(map);
+    startMarker = L.marker(ll, { icon: makeIcon('#00ff88', 'S') }).addTo(map);
     startLL = ll;
     document.getElementById('start-coords').textContent = ll.lat.toFixed(5) + '\n' + ll.lng.toFixed(5);
     setHint('🏁', 'ゴール地点をタップしてください', true);
     setupStep = 1;
-    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
-    if (goalMarker) { map.removeLayer(goalMarker); goalMarker = null; }
-    goalLL = null;
-    courseDistM = 0;
-    document.getElementById('goal-coords').textContent = '未設定';
-    document.getElementById('route-status').innerHTML = '';
-    document.getElementById('btn-go').disabled = true;
+    clearRoute();
   } else if (setupStep === 1) {
     if (goalMarker) map.removeLayer(goalMarker);
-    goalMarker = L.marker(ll, { icon: makeIcon('#ff3d6b','G') }).addTo(map);
+    goalMarker = L.marker(ll, { icon: makeIcon('#ff3d6b', 'G') }).addTo(map);
     goalLL = ll;
     document.getElementById('goal-coords').textContent = ll.lat.toFixed(5) + '\n' + ll.lng.toFixed(5);
     setupStep = 2;
     setHint('⏳', 'ルートを検索中...', true);
-    document.getElementById('route-status').innerHTML = '<div class="route-fetching"><span class="spinner"></span>道路ルートを取得中...</div>';
+    document.getElementById('route-status').innerHTML = '<div class="route-fetch"><span class="spin"></span>道路ルートを取得中...</div>';
     fetchRoute(startLL, ll);
   } else {
     resetCourse();
   }
 }
 
+function clearRoute() {
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  if (goalMarker) { map.removeLayer(goalMarker); goalMarker = null; }
+  goalLL = null; courseDistM = 0; routeCoords = [];
+  document.getElementById('goal-coords').textContent = '未設定';
+  document.getElementById('route-status').innerHTML = '';
+  document.getElementById('btn-go').disabled = true;
+  document.getElementById('btn-save').disabled = true;
+}
+
 function setHint(icon, text, showReset) {
   document.getElementById('hint-icon').textContent = icon;
   document.getElementById('hint-text').textContent = text;
-  document.getElementById('btn-reset-course').style.display = showReset ? '' : 'none';
+  document.getElementById('btn-reset').style.display = showReset ? '' : 'none';
 }
 
 function resetCourse() {
   setupStep = 0;
   if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
-  if (goalMarker)  { map.removeLayer(goalMarker);  goalMarker  = null; }
-  if (routeLayer)  { map.removeLayer(routeLayer);  routeLayer  = null; }
-  startLL = null; goalLL = null; courseDistM = 0; routeCoords = [];
+  clearRoute();
+  startLL = null;
   document.getElementById('start-coords').textContent = '未設定';
-  document.getElementById('goal-coords').textContent  = '未設定';
-  document.getElementById('route-status').innerHTML = '';
-  document.getElementById('btn-go').disabled = true;
   setHint('📍', '地図をタップしてスタート地点を設定', false);
 }
 
@@ -460,179 +446,146 @@ async function fetchRoute(start, goal) {
   try {
     const res = await fetch(url);
     const data = await res.json();
-    if (data.code !== 'Ok' || !data.routes.length) throw new Error('no route');
+    if (data.code !== 'Ok' || !data.routes.length) throw new Error();
     const route = data.routes[0];
-    courseDistM = route.distance;
-    estDurSec   = route.duration;
+    courseDistM = route.distance; estDurSec = route.duration;
     routeCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
     straightDistM = haversine(start.lat, start.lng, goal.lat, goal.lng);
-
     if (routeLayer) map.removeLayer(routeLayer);
     routeLayer = L.polyline(routeCoords, { color: '#00e5ff', weight: 5, opacity: 0.85 }).addTo(map);
     map.fitBounds(routeLayer.getBounds(), { padding: [28, 28] });
-
-    const roadStr   = fmtDist(courseDistM);
-    const straightStr = fmtDist(straightDistM);
-    const timeStr   = fmtDuration(estDurSec);
     document.getElementById('route-status').innerHTML = `
       <div class="route-card">
-        <div class="route-item"><div class="route-item-label">道路沿い</div><div class="route-item-value">${roadStr}</div></div>
-        <div class="route-divider"></div>
-        <div class="route-item"><div class="route-item-label">推定時間</div><div class="route-item-value">${timeStr}</div></div>
-        <div class="route-divider"></div>
-        <div class="route-item"><div class="route-item-label">直線距離</div><div class="route-item-value">${straightStr}</div></div>
+        <div class="ri"><div class="ri-label">道路沿い</div><div class="ri-val">${fmtDist(courseDistM)}</div></div>
+        <div class="rdiv"></div>
+        <div class="ri"><div class="ri-label">推定時間</div><div class="ri-val">${fmtDur(estDurSec)}</div></div>
+        <div class="rdiv"></div>
+        <div class="ri"><div class="ri-label">直線距離</div><div class="ri-val">${fmtDist(straightDistM)}</div></div>
       </div>`;
     setHint('✅', 'コース設定完了。タップでリセット。', true);
     document.getElementById('btn-go').disabled = false;
-  } catch(e) {
-    document.getElementById('route-status').innerHTML = '<div class="route-error">ルートが見つかりませんでした。別の地点を試してください。</div>';
-    setupStep = 1;
-    setHint('🏁', 'ゴール地点を再設定してください', true);
+    document.getElementById('btn-save').disabled = false;
+  } catch {
+    document.getElementById('route-status').innerHTML = '<div class="route-err">ルートが見つかりませんでした。別の地点を試してください。</div>';
+    setupStep = 1; setHint('🏁', 'ゴール地点を再設定してください', true);
   }
 }
 
-// ===================== GPS =====================
 function initGPS() {
   if (!navigator.geolocation) return;
   navigator.geolocation.watchPosition(pos => {
     const ll = [pos.coords.latitude, pos.coords.longitude];
-    const acc = pos.coords.accuracy;
     document.getElementById('gps-dot').classList.add('ok');
     document.getElementById('gps-label').textContent = 'GPS準備完了';
-    // 現在地マーカー更新
     if (!myLocMarker) {
-      myLocCircle = L.circle(ll, { radius: acc, color: '#00e5ff', fillColor: '#00e5ff', fillOpacity: 0.08, weight: 1 }).addTo(map);
-      myLocMarker = L.marker(ll, { icon: L.divIcon({
-        className: '',
-        html: '<div style="width:16px;height:16px;border-radius:50%;background:#00e5ff;border:3px solid #fff;box-shadow:0 0 10px rgba(0,229,255,0.8)"></div>',
-        iconSize:[16,16], iconAnchor:[8,8]
-      }), zIndexOffset: 500 }).addTo(map);
+      myLocCircle = L.circle(ll, { radius: pos.coords.accuracy, color: '#00e5ff', fillColor: '#00e5ff', fillOpacity: 0.07, weight: 1 }).addTo(map);
+      myLocMarker = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:#00e5ff;border:3px solid #fff;box-shadow:0 0 10px rgba(0,229,255,0.8)"></div>', iconSize: [14,14], iconAnchor: [7,7] }), zIndexOffset: 500 }).addTo(map);
     } else {
       myLocMarker.setLatLng(ll);
       myLocCircle.setLatLng(ll);
-      myLocCircle.setRadius(acc);
+      myLocCircle.setRadius(pos.coords.accuracy);
     }
   }, () => {}, { enableHighAccuracy: true, maximumAge: 3000 });
 }
 
 function locateMe() {
   if (!navigator.geolocation) return;
-  const btn = document.getElementById('locate-btn');
-  btn.classList.add('locating');
-  navigator.geolocation.getCurrentPosition(pos => {
-    btn.classList.remove('locating');
-    map.setView([pos.coords.latitude, pos.coords.longitude], 17, { animate: true });
-  }, () => btn.classList.remove('locating'), { enableHighAccuracy: true });
+  navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 17, { animate: true }), () => {}, { enableHighAccuracy: true });
 }
 
-// ===================== TABS =====================
+// ===== TABS =====
 function showTab(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('screen-' + (name === 'records' ? 'records' : name)).classList.add('active');
-  document.getElementById('tab-' + (name === 'records' ? 'rec' : name)).classList.add('active');
+  const sid = name === 'records' ? 'screen-records' : name === 'race' ? 'screen-race' : 'screen-setup';
+  const tid = name === 'records' ? 'tab-rec' : name === 'race' ? 'tab-race' : 'tab-setup';
+  document.getElementById(sid).classList.add('active');
+  document.getElementById(tid).classList.add('active');
   if (name === 'setup') setTimeout(() => map && map.invalidateSize(), 80);
+  if (name === 'race') { setTimeout(() => { initRaceMap(); raceMap && raceMap.invalidateSize(); }, 80); }
   if (name === 'records') renderRecords();
 }
 
-// ===================== RACE =====================
+// ===== COUNTDOWN =====
 function raceAction() {
   if (!isRacing && !raceFinished) startCountdown();
   else if (isRacing) finishRace(true);
 }
 
-// --- カウントダウン ---
 function startCountdown() {
   if (!routeCoords.length) { alert('先にコースを設定してください'); showTab('setup'); return; }
-  document.getElementById('countdown-overlay').classList.add('show');
-  // 「スタートします」を読み上げてから厳密1秒×5カウント開始
+  // AudioContext をユーザージェスチャで起動
+  getAudioCtx();
+  document.getElementById('cd-overlay').classList.add('show');
   speak('スタートします');
-  // 読み上げ時間を考慮して1秒後にカウント開始
-  setTimeout(() => runCountStep(5), 1000);
+  setTimeout(() => runCountStep(5), 1200);
 }
 
 function runCountStep(n) {
-  const numEl  = document.getElementById('cd-number');
+  const numEl = document.getElementById('cd-num');
   const ringEl = document.getElementById('cd-ring');
-  const circum = 2 * Math.PI * 70;
+  const circum = 2 * Math.PI * 75; // r=75
 
   if (n < 0) {
-    // GO表示
-    numEl.textContent = 'GO!';
-    numEl.className = 'cd-number cd-go';
+    numEl.textContent = 'GO!'; numEl.className = 'cd-num go';
     ringEl.style.strokeDashoffset = circum;
-    animPop(numEl);
-    speak('GO');
-    setTimeout(() => {
-      document.getElementById('countdown-overlay').classList.remove('show');
-      beginRace();
-    }, 800);
+    animPop(numEl); speak('GO');
+    setTimeout(() => { document.getElementById('cd-overlay').classList.remove('show'); beginRace(); }, 700);
     return;
   }
-
   numEl.textContent = n > 0 ? String(n) : '';
-  numEl.className = 'cd-number';
-  // リング: n/5 の割合で埋める
+  numEl.className = 'cd-num';
   ringEl.style.strokeDashoffset = circum * (1 - n / 5);
   animPop(numEl);
-
-  if (n > 0) {
-    speak(String(n));
-    setTimeout(() => runCountStep(n - 1), 1000); // 厳密1秒
-  } else {
-    setTimeout(() => runCountStep(-1), 200);
-  }
+  if (n > 0) { speak(String(n)); setTimeout(() => runCountStep(n - 1), 1000); }
+  else setTimeout(() => runCountStep(-1), 300);
 }
 
 function animPop(el) {
-  el.style.transition = 'none';
-  el.style.transform = 'scale(1.5)'; el.style.opacity = '0';
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      el.style.transition = 'transform 0.35s cubic-bezier(.17,.67,.35,1.2), opacity 0.2s';
-      el.style.transform = 'scale(1)'; el.style.opacity = '1';
-    });
-  });
+  el.style.transition = 'none'; el.style.transform = 'scale(1.5)'; el.style.opacity = '0';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.style.transition = 'transform 0.35s cubic-bezier(.17,.67,.35,1.2),opacity 0.2s';
+    el.style.transform = 'scale(1)'; el.style.opacity = '1';
+  }));
 }
 
-// --- レース本体 ---
+// ===== RACE =====
 function beginRace() {
   isRacing = true; raceFinished = false;
   startTime = performance.now(); elapsedMs = 0;
-  maxSpeed = 0; traveledM = 0;
+  maxSpeed = 0; traveledM = 0; lastBeepSec = -1;
+  goal500Done = false; goal100Done = false;
 
   document.getElementById('race-status').textContent = 'レース中！ゴールへ向かってください';
   document.getElementById('timer').className = 'timer-display running';
-  document.getElementById('btn-race').className = 'btn-action stop';
+  document.getElementById('btn-race').className = 'btn-act stop';
   document.getElementById('btn-race').textContent = 'STOP';
-  setRemain(courseDistM);
+  document.getElementById('stat-remain').innerHTML = fmtDist(courseDistM);
 
-  // タイマー
   function tick() {
     if (!isRacing) return;
     elapsedMs = performance.now() - startTime;
     document.getElementById('timer').textContent = fmtTime(elapsedMs);
+    // 平均速度をリアルタイム更新
+    if (elapsedMs > 0 && traveledM > 0) {
+      const avg = (traveledM / 1000) / (elapsedMs / 3600000);
+      document.getElementById('stat-avg').innerHTML = avg.toFixed(1) + '<span class="stat-unit">km/h</span>';
+    }
+    // 経過時間（分:秒）
+    const em = Math.floor(elapsedMs/60000), es = Math.floor((elapsedMs%60000)/1000);
+    document.getElementById('stat-elapsed').textContent = String(em).padStart(2,'0') + ':' + String(es).padStart(2,'0');
     timerRaf = requestAnimationFrame(tick);
   }
   timerRaf = requestAnimationFrame(tick);
 
-  // BGM (YouTube Music では自動再生できないので、Apple Music Web API または SoundCloud埋め込みは別途)
-  // ここではWeb Audio APIでアンビエントなドローンループを生成して代替
   startAmbientBGM();
-
-  // 1分アナウンス
   let mins = 0;
-  minuteTimer = setInterval(() => {
-    mins++;
-    speak(`${mins}分経過`);
-  }, 60000);
+  minuteTimer = setInterval(() => { mins++; speak(`${mins}分経過`); }, 60000);
 
-  // GPS watch
   if (navigator.geolocation) {
     watchId = navigator.geolocation.watchPosition(pos => {
       if (!isRacing) return;
-      const spd = pos.coords.speed != null && pos.coords.speed >= 0
-        ? pos.coords.speed * 3.6 : null;
+      const spd = pos.coords.speed != null && pos.coords.speed >= 0 ? pos.coords.speed * 3.6 : null;
       if (spd !== null) {
         document.getElementById('stat-speed').innerHTML = spd.toFixed(1) + '<span class="stat-unit">km/h</span>';
         if (spd > maxSpeed) { maxSpeed = spd; document.getElementById('stat-max').innerHTML = maxSpeed.toFixed(1) + '<span class="stat-unit">km/h</span>'; }
@@ -640,23 +593,44 @@ function beginRace() {
       const traveled = nearestProgress(pos.coords.latitude, pos.coords.longitude);
       traveledM = traveled;
       const pct = Math.min(100, Math.round(traveled / courseDistM * 100));
-      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('prog-fill').style.width = pct + '%';
       document.getElementById('pct-label').textContent = pct + '%';
-      document.getElementById('stat-moved').innerHTML = fmtDist(traveled) + '';
+      document.getElementById('stat-moved').innerHTML = fmtDist(traveled);
       const remain = Math.max(0, courseDistM - traveled);
-      setRemain(remain);
-      updateGoalBeep(remain);
-      // ゴール地点への直接距離で判定（30m以内 = ゴール）
-      const distToGoal = goalLL ? haversine(pos.coords.latitude, pos.coords.longitude, goalLL.lat, goalLL.lng) : 9999;
-      if (distToGoal <= 30) finishRace(false);
+      document.getElementById('stat-remain').innerHTML = fmtDist(remain);
+      updateGoalAlerts(remain);
+
+      // レース中地図：現在地マーカー更新
+      if (raceMap) {
+        const ll = [pos.coords.latitude, pos.coords.longitude];
+        if (!raceLocMarker) {
+          raceLocMarker = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div style="width:18px;height:18px;border-radius:50%;background:#00e5ff;border:3px solid #fff;box-shadow:0 0 12px rgba(0,229,255,0.9)"></div>', iconSize:[18,18], iconAnchor:[9,9] }), zIndexOffset:600 }).addTo(raceMap);
+        } else { raceLocMarker.setLatLng(ll); }
+        raceMap.setView(ll, 16, { animate: true, duration: 0.8 });
+      }
+
       document.getElementById('gps-dot').classList.add('ok');
       document.getElementById('gps-label').textContent = 'GPS追跡中';
+
+      // ゴール地点への直接距離で判定（30m以内）
+      const distToGoal = goalLL ? haversine(pos.coords.latitude, pos.coords.longitude, goalLL.lat, goalLL.lng) : 9999;
+      if (distToGoal <= 30) finishRace(false);
     }, () => {}, { enableHighAccuracy: true, maximumAge: 1000 });
   }
 }
 
-function setRemain(m) {
-  document.getElementById('stat-remain').innerHTML = fmtDist(m);
+function updateGoalAlerts(remain) {
+  if (remain <= 100) {
+    // 1秒ごとにビープ（setTimeoutで確実に鳴らす）
+    const sec = Math.floor(elapsedMs / 1000);
+    if (sec !== lastBeepSec) {
+      lastBeepSec = sec;
+      playBeep(remain <= 20 ? 1200 : 880);
+    }
+    if (!goal100Done) { goal100Done = true; speak('まもなくゴールです'); }
+  } else if (remain <= 500 && !goal500Done) {
+    goal500Done = true; speak('ゴールまで500メートルです');
+  }
 }
 
 function nearestProgress(lat, lng) {
@@ -667,21 +641,8 @@ function nearestProgress(lat, lng) {
     if (d < minD) { minD = d; nearIdx = i; }
   }
   let traveled = 0;
-  for (let i = 1; i <= nearIdx; i++) {
-    traveled += haversine(routeCoords[i-1][0], routeCoords[i-1][1], routeCoords[i][0], routeCoords[i][1]);
-  }
+  for (let i = 1; i <= nearIdx; i++) traveled += haversine(routeCoords[i-1][0], routeCoords[i-1][1], routeCoords[i][0], routeCoords[i][1]);
   return Math.min(traveled, courseDistM);
-}
-
-let goal500Announced = false, goal100Announced = false;
-function updateGoalBeep(remain) {
-  if (remain <= 100) {
-    const sec = Math.floor(elapsedMs / 1000);
-    if (sec !== lastBeepSec) { lastBeepSec = sec; playBeep(remain <= 20 ? 1200 : 880); }
-    if (!goal100Announced) { goal100Announced = true; speak('まもなくゴールです'); }
-  } else if (remain <= 500 && !goal500Announced) {
-    goal500Announced = true; speak('ゴールまで500メートルです');
-  }
 }
 
 function finishRace(manual) {
@@ -693,18 +654,16 @@ function finishRace(manual) {
 
   document.getElementById('timer').className = manual ? 'timer-display' : 'timer-display finished';
   document.getElementById('race-status').textContent = manual ? '手動停止（記録なし）' : 'ゴール！おめでとうございます！';
-  document.getElementById('btn-race').className = 'btn-action done';
+  document.getElementById('btn-race').className = 'btn-act done';
   document.getElementById('btn-race').textContent = manual ? 'STOPPED' : 'DONE';
   document.getElementById('btn-race').disabled = true;
 
   if (!manual) {
-    // ゴール到達時のみ記録保存・画面遷移
     speak('ゴール！お疲れ様でした！');
-    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('prog-fill').style.width = '100%';
     document.getElementById('pct-label').textContent = '100%';
     const avg = elapsedMs > 0 ? (traveledM / 1000) / (elapsedMs / 3600000) : 0;
-    records.unshift({ time: elapsedMs, dist: courseDistM, maxSpd: maxSpeed, avgSpd: avg, date: new Date().toLocaleDateString('ja-JP') });
-    records.sort((a,b) => a.time - b.time);
+    records.unshift({ time: elapsedMs, dist: courseDistM, maxSpd: maxSpeed, avgSpd: avg, date: new Date().toLocaleDateString('ja-JP'), recordedAt: new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'}) });
     records = records.slice(0, 20);
     localStorage.setItem('ta_records', JSON.stringify(records));
     setTimeout(() => showTab('records'), 1800);
@@ -713,64 +672,152 @@ function finishRace(manual) {
 
 function resetRace() {
   isRacing = false; raceFinished = false;
-  cancelAnimationFrame(timerRaf);
-  clearInterval(minuteTimer);
+  cancelAnimationFrame(timerRaf); clearInterval(minuteTimer);
   if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   stopAmbientBGM();
-  goal500Announced = false; goal100Announced = false; lastBeepSec = -1;
-  elapsedMs = 0; maxSpeed = 0; traveledM = 0;
+  if (raceLocMarker) { raceMap && raceMap.removeLayer(raceLocMarker); raceLocMarker = null; }
+  goal500Done = false; goal100Done = false; lastBeepSec = -1; elapsedMs = 0; maxSpeed = 0; traveledM = 0;
   document.getElementById('timer').textContent = '00:00.00';
   document.getElementById('timer').className = 'timer-display';
   document.getElementById('race-status').textContent = 'スタートボタンを押してレース開始';
-  document.getElementById('btn-race').className = 'btn-action start';
+  document.getElementById('btn-race').className = 'btn-act start';
   document.getElementById('btn-race').textContent = 'START';
   document.getElementById('btn-race').disabled = false;
   document.getElementById('stat-speed').innerHTML = '0.0<span class="stat-unit">km/h</span>';
   document.getElementById('stat-max').innerHTML = '0.0<span class="stat-unit">km/h</span>';
   document.getElementById('stat-moved').innerHTML = '0<span class="stat-unit">m</span>';
   document.getElementById('stat-remain').innerHTML = '—';
-  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('stat-avg').innerHTML = '0.0<span class="stat-unit">km/h</span>';
+  document.getElementById('stat-elapsed').textContent = '00:00';
+  document.getElementById('prog-fill').style.width = '0%';
   document.getElementById('pct-label').textContent = '0%';
 }
 
-// ===================== RECORDS =====================
+// ===== RECORDS =====
 function renderRecords() {
   const el = document.getElementById('records-list');
-  if (!records.length) {
-    el.innerHTML = '<div class="no-records">まだ記録がありません<br>レースを完了すると<br>ここに記録が表示されます</div>';
-    return;
-  }
-  const medals = ['🥇','🥈','🥉'];
-  const cls = ['gold','silver','bronze'];
-  el.innerHTML = records.map((r,i) => `
-    <div class="record-item ${cls[i]||''}">
-      <div class="record-rank">${medals[i] || (i+1)+'.'}</div>
-      <div class="record-info">
-        <div class="record-date">${r.date}</div>
-        <div class="record-dist">${fmtDist(r.dist)} · 最高 ${r.maxSpd.toFixed(1)} km/h</div>
+  if (!records.length) { el.innerHTML = '<div class="no-records">まだ記録がありません<br>ゴールすると記録が表示されます</div>'; return; }
+  el.innerHTML = records.map((r, i) => `
+    <div class="rec-item">
+      <div class="rec-num">${i === 0 ? '<span class="rec-new">NEW</span>' : (i+1)}</div>
+      <div class="rec-info">
+        <div class="rec-date">${r.date} ${r.recordedAt || ''}</div>
+        <div class="rec-dist">${fmtDist(r.dist)} · 最高 ${r.maxSpd.toFixed(1)} km/h · 平均 ${r.avgSpd.toFixed(1)} km/h</div>
       </div>
-      <div class="record-right">
-        <div class="record-time">${fmtTime(r.time)}</div>
-        <div class="record-speed">平均 ${r.avgSpd.toFixed(1)} km/h</div>
+      <div class="rec-right">
+        <div class="rec-time">${fmtTime(r.time)}</div>
       </div>
+      <button class="rec-del" onclick="deleteRecord(${i})" title="削除">×</button>
     </div>`).join('');
 }
 
-// ===================== SOUND =====================
+function deleteRecord(i) {
+  if (!confirm('この記録を削除しますか？')) return;
+  records.splice(i, 1);
+  localStorage.setItem('ta_records', JSON.stringify(records));
+  renderRecords();
+}
+
+function deleteAllRecords() {
+  if (!records.length) return;
+  if (!confirm('全ての記録を削除しますか？')) return;
+  records = [];
+  localStorage.setItem('ta_records', JSON.stringify(records));
+  renderRecords();
+}
+
+// ===== COURSE SAVE/LOAD =====
+function openSaveModal() {
+  if (!courseDistM) return;
+  document.getElementById('course-name-input').value = '';
+  document.getElementById('save-modal').classList.add('show');
+  setTimeout(() => document.getElementById('course-name-input').focus(), 100);
+}
+function closeSaveModal() { document.getElementById('save-modal').classList.remove('show'); }
+
+function saveCourse() {
+  const name = document.getElementById('course-name-input').value.trim() || '無名コース';
+  const course = {
+    id: Date.now(), name,
+    startLL: { lat: startLL.lat, lng: startLL.lng },
+    goalLL: { lat: goalLL.lat, lng: goalLL.lng },
+    distM: courseDistM, durSec: estDurSec,
+    routeCoords: routeCoords.slice()
+  };
+  savedCourses.unshift(course);
+  savedCourses = savedCourses.slice(0, 20);
+  localStorage.setItem('ta_courses', JSON.stringify(savedCourses));
+  closeSaveModal();
+  renderCourseList();
+}
+
+function renderCourseList() {
+  const el = document.getElementById('course-list');
+  if (!savedCourses.length) { el.innerHTML = '<div class="no-courses">保存済みコースはありません</div>'; return; }
+  el.innerHTML = savedCourses.map((c, i) => `
+    <div class="course-item" onclick="loadCourse(${i})">
+      <span class="course-item-name">${c.name}</span>
+      <span class="course-item-dist">${fmtDist(c.distM)}</span>
+      <button class="course-item-del" onclick="event.stopPropagation();deleteCourse(${i})" title="削除">×</button>
+    </div>`).join('');
+}
+
+function loadCourse(i) {
+  const c = savedCourses[i];
+  resetCourse();
+  startLL = L.latLng(c.startLL.lat, c.startLL.lng);
+  goalLL  = L.latLng(c.goalLL.lat,  c.goalLL.lng);
+  courseDistM  = c.distM;
+  estDurSec    = c.durSec;
+  routeCoords  = c.routeCoords.slice();
+  straightDistM = haversine(startLL.lat, startLL.lng, goalLL.lat, goalLL.lng);
+  setupStep = 2;
+
+  if (startMarker) map.removeLayer(startMarker);
+  if (goalMarker)  map.removeLayer(goalMarker);
+  if (routeLayer)  map.removeLayer(routeLayer);
+
+  startMarker = L.marker(startLL, { icon: makeIcon('#00ff88','S') }).addTo(map);
+  goalMarker  = L.marker(goalLL,  { icon: makeIcon('#ff3d6b','G') }).addTo(map);
+  routeLayer  = L.polyline(routeCoords, { color: '#00e5ff', weight: 5, opacity: 0.85 }).addTo(map);
+  map.fitBounds(routeLayer.getBounds(), { padding: [28, 28] });
+
+  document.getElementById('start-coords').textContent = startLL.lat.toFixed(5) + '\n' + startLL.lng.toFixed(5);
+  document.getElementById('goal-coords').textContent  = goalLL.lat.toFixed(5)  + '\n' + goalLL.lng.toFixed(5);
+  document.getElementById('route-status').innerHTML = `
+    <div class="route-card">
+      <div class="ri"><div class="ri-label">道路沿い</div><div class="ri-val">${fmtDist(courseDistM)}</div></div>
+      <div class="rdiv"></div>
+      <div class="ri"><div class="ri-label">推定時間</div><div class="ri-val">${fmtDur(estDurSec)}</div></div>
+      <div class="rdiv"></div>
+      <div class="ri"><div class="ri-label">直線距離</div><div class="ri-val">${fmtDist(straightDistM)}</div></div>
+    </div>`;
+  setHint('✅', `「${c.name}」を読み込みました。タップでリセット。`, true);
+  document.getElementById('btn-go').disabled = false;
+  document.getElementById('btn-save').disabled = false;
+}
+
+function deleteCourse(i) {
+  if (!confirm(`「${savedCourses[i].name}」を削除しますか？`)) return;
+  savedCourses.splice(i, 1);
+  localStorage.setItem('ta_courses', JSON.stringify(savedCourses));
+  renderCourseList();
+}
+
+// ===== SOUND =====
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new AudioCtx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
 }
 
-function speak(text, onEnd) {
-  if (!synth) { onEnd && onEnd(); return; }
+function speak(text) {
+  if (!synth) return;
   synth.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'ja-JP'; u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
-  // 日本語音声を優先
+  u.lang = 'ja-JP'; u.rate = 0.95; u.volume = 1.0;
   const voices = synth.getVoices().filter(v => v.lang.startsWith('ja'));
   if (voices.length) u.voice = voices[0];
-  if (onEnd) u.onend = onEnd;
   synth.speak(u);
 }
 
@@ -780,30 +827,23 @@ function playBeep(freq = 880) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.value = freq;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.4, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-    osc.start(); osc.stop(ctx.currentTime + 0.15);
-  } catch(e) {}
+    osc.type = 'sine'; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.18);
+  } catch(e) { console.warn('beep error', e); }
 }
 
-// アンビエントBGM（Web Audio APIで生成するドローンループ）
 let bgmNodes = [];
 function startAmbientBGM() {
   try {
     const ctx = getAudioCtx();
-    // 低音ドローン + ハイハット的なリズム
-    const freqs = [55, 110, 165, 220];
-    freqs.forEach((f, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = i === 0 ? 'sawtooth' : 'sine';
-      osc.frequency.value = f;
-      gain.gain.value = i === 0 ? 0.04 : 0.015;
-      osc.start();
-      bgmNodes.push(osc, gain);
+    [55, 110, 165, 220].forEach((f, i) => {
+      const osc = ctx.createOscillator(); const g = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type = i === 0 ? 'sawtooth' : 'sine'; osc.frequency.value = f;
+      g.gain.value = i === 0 ? 0.04 : 0.015; osc.start();
+      bgmNodes.push(osc, g);
     });
   } catch(e) {}
 }
@@ -812,31 +852,17 @@ function stopAmbientBGM() {
   bgmNodes = [];
 }
 
-// ===================== UTILS =====================
+// ===== UTILS =====
 function fmtTime(ms) {
-  const m  = Math.floor(ms / 60000);
-  const s  = Math.floor((ms % 60000) / 1000);
-  const cs = Math.floor((ms % 1000) / 10);
+  const m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000), cs = Math.floor((ms%1000)/10);
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
 }
-function fmtDist(m) {
-  return m >= 1000 ? (m/1000).toFixed(2) + ' km' : Math.round(m) + ' m';
-}
-function fmtDuration(sec) {
-  const m = Math.floor(sec/60), s = Math.round(sec%60);
-  return m > 0 ? `${m}分${s > 0 ? s+'秒' : ''}` : `${s}秒`;
-}
+function fmtDist(m) { return m >= 1000 ? (m/1000).toFixed(2)+' km' : Math.round(m)+' m'; }
+function fmtDur(s) { const m = Math.floor(s/60), r = Math.round(s%60); return m > 0 ? `${m}分${r>0?r+'秒':''}` : `${r}秒`; }
 function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-// 音声読み込み待ち
-if (synth) {
-  synth.getVoices();
-  synth.addEventListener('voiceschanged', () => synth.getVoices());
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 </script>
 </body>
