@@ -41,6 +41,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   flex-shrink: 0;
 }
 .header-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; letter-spacing: 2px; color: var(--accent); }
+.header-version { font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
 .gps-badge {
   display: flex; align-items: center; gap: 6px;
   font-size: 11px; color: var(--muted);
@@ -234,7 +235,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 <body>
 <div id="app">
   <div class="header">
-    <div class="header-title">TIME ATTACK</div>
+    <div>
+      <div class="header-title">TIME ATTACK</div>
+      <div class="header-version">v1.3.0</div>
+    </div>
     <div class="gps-badge">
       <div class="gps-dot" id="gps-dot"></div>
       <span id="gps-label">GPS待機中</span>
@@ -639,9 +643,12 @@ function beginRace() {
       document.getElementById('progress-fill').style.width = pct + '%';
       document.getElementById('pct-label').textContent = pct + '%';
       document.getElementById('stat-moved').innerHTML = fmtDist(traveled) + '';
-      setRemain(Math.max(0, courseDistM - traveled));
-      updateGoalBeep(Math.max(0, courseDistM - traveled));
-      if (pct >= 98) finishRace(false);
+      const remain = Math.max(0, courseDistM - traveled);
+      setRemain(remain);
+      updateGoalBeep(remain);
+      // ゴール地点への直接距離で判定（30m以内 = ゴール）
+      const distToGoal = goalLL ? haversine(pos.coords.latitude, pos.coords.longitude, goalLL.lat, goalLL.lng) : 9999;
+      if (distToGoal <= 30) finishRace(false);
       document.getElementById('gps-dot').classList.add('ok');
       document.getElementById('gps-label').textContent = 'GPS追跡中';
     }, () => {}, { enableHighAccuracy: true, maximumAge: 1000 });
@@ -684,21 +691,24 @@ function finishRace(manual) {
   if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   stopAmbientBGM();
 
-  document.getElementById('timer').className = 'timer-display finished';
-  document.getElementById('race-status').textContent = manual ? 'レース終了（手動停止）' : 'ゴール！おめでとうございます！';
+  document.getElementById('timer').className = manual ? 'timer-display' : 'timer-display finished';
+  document.getElementById('race-status').textContent = manual ? '手動停止（記録なし）' : 'ゴール！おめでとうございます！';
   document.getElementById('btn-race').className = 'btn-action done';
-  document.getElementById('btn-race').textContent = 'DONE';
+  document.getElementById('btn-race').textContent = manual ? 'STOPPED' : 'DONE';
   document.getElementById('btn-race').disabled = true;
-  if (!manual) { document.getElementById('progress-fill').style.width = '100%'; document.getElementById('pct-label').textContent = '100%'; }
 
-  if (!manual) speak('ゴール！お疲れ様でした！');
-
-  const avg = elapsedMs > 0 ? (traveledM / 1000) / (elapsedMs / 3600000) : 0;
-  records.unshift({ time: elapsedMs, dist: courseDistM, maxSpd: maxSpeed, avgSpd: avg, date: new Date().toLocaleDateString('ja-JP') });
-  records.sort((a,b) => a.time - b.time);
-  records = records.slice(0, 20);
-  localStorage.setItem('ta_records', JSON.stringify(records));
-  setTimeout(() => showTab('records'), 1800);
+  if (!manual) {
+    // ゴール到達時のみ記録保存・画面遷移
+    speak('ゴール！お疲れ様でした！');
+    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('pct-label').textContent = '100%';
+    const avg = elapsedMs > 0 ? (traveledM / 1000) / (elapsedMs / 3600000) : 0;
+    records.unshift({ time: elapsedMs, dist: courseDistM, maxSpd: maxSpeed, avgSpd: avg, date: new Date().toLocaleDateString('ja-JP') });
+    records.sort((a,b) => a.time - b.time);
+    records = records.slice(0, 20);
+    localStorage.setItem('ta_records', JSON.stringify(records));
+    setTimeout(() => showTab('records'), 1800);
+  }
 }
 
 function resetRace() {
