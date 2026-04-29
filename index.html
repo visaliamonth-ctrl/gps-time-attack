@@ -45,7 +45,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .screen.active{display:block}
 
 /* ===== SETUP ===== */
-#map{width:100%;height:260px;position:relative}
+#map{width:100%;height:320px;position:relative}
 .leaflet-container{background:#1a2535}
 #locate-btn{position:absolute;top:10px;right:10px;z-index:1000;width:38px;height:38px;border-radius:9px;background:var(--surface);border:1px solid var(--border);color:var(--accent);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.5)}
 
@@ -59,6 +59,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .mbadge{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
 .ms{background:#00ff88;color:#002a18}.mg{background:#ff3d6b;color:#2a0010}
 .pt-label{font-size:10px;color:var(--muted)}
+.pt-edit-btn{margin-left:auto;font-size:10px;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.25);color:var(--accent);padding:2px 8px;border-radius:5px;cursor:pointer}
+.pt-card.editing{border-color:rgba(0,229,255,0.5);background:rgba(0,229,255,0.05)}
 .pt-coords{font-family:monospace;font-size:10px;color:var(--text);line-height:1.6}
 .route-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;align-items:center}
 .rdiv{background:var(--border);height:28px}
@@ -67,6 +69,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .ri-val{font-family:var(--fd);font-size:15px;font-weight:700}
 .route-fetch{text-align:center;padding:12px;color:var(--muted);font-size:12px}
 .route-err{color:var(--red);font-size:12px;padding:9px 12px;background:rgba(255,61,107,0.08);border-radius:8px;border:1px solid rgba(255,61,107,0.2)}
+.route-roadname{margin-top:6px;background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.18);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--accent);text-align:center;letter-spacing:0.3px}
 .btn-pri{width:100%;padding:14px;background:var(--accent);border:none;border-radius:12px;font-family:var(--fd);font-size:18px;font-weight:700;color:#001a20;cursor:pointer;letter-spacing:1px;transition:opacity 0.2s}
 .btn-pri:disabled{opacity:0.3;cursor:default}
 
@@ -89,7 +92,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .race-body{padding:12px;display:flex;flex-direction:column;gap:12px}
 
 /* 地図（レース中） */
-#race-map{width:100%;height:200px;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+#race-map{width:100%;height:220px;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
 
 /* タイマー大表示 */
 .timer-block{text-align:center;padding:8px 0 4px}
@@ -143,6 +146,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .rec-del{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0}
 .rec-num{font-family:var(--fd);font-size:18px;font-weight:700;color:var(--muted);width:32px;text-align:center;flex-shrink:0}
 .rec-new{font-size:10px;background:rgba(0,229,255,0.15);color:var(--accent);border:1px solid rgba(0,229,255,0.3);padding:2px 6px;border-radius:6px;letter-spacing:1px}
+.rec-road{font-size:11px;color:var(--accent);margin-bottom:2px;opacity:0.85}
 
 /* COUNTDOWN */
 #cd-overlay{position:fixed;inset:0;z-index:999;background:rgba(10,10,20,0.93);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px}
@@ -179,7 +183,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   <div class="hdr">
     <div class="hdr-left">
       <div class="hdr-title">TIME ATTACK</div>
-      <div class="hdr-ver">v1.5.1</div>
+      <div class="hdr-ver">v1.5.4</div>
     </div>
     <div class="gps-badge">
       <div class="gps-dot" id="gps-dot"></div>
@@ -204,12 +208,20 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="hint-reset" id="btn-reset" onclick="resetCourse()" style="display:none">リセット</button>
         </div>
         <div class="pts">
-          <div class="pt-card">
-            <div class="pt-head"><div class="mbadge ms">S</div><span class="pt-label">スタート</span></div>
+          <div class="pt-card" id="pt-card-start">
+            <div class="pt-head">
+              <div class="mbadge ms">S</div>
+              <span class="pt-label">スタート</span>
+              <button class="pt-edit-btn" id="pt-edit-start" onclick="setEditMode('start')" style="display:none">変更</button>
+            </div>
             <div class="pt-coords" id="start-coords">未設定</div>
           </div>
-          <div class="pt-card">
-            <div class="pt-head"><div class="mbadge mg">G</div><span class="pt-label">ゴール</span></div>
+          <div class="pt-card" id="pt-card-goal">
+            <div class="pt-head">
+              <div class="mbadge mg">G</div>
+              <span class="pt-label">ゴール</span>
+              <button class="pt-edit-btn" id="pt-edit-goal" onclick="setEditMode('goal')" style="display:none">変更</button>
+            </div>
             <div class="pt-coords" id="goal-coords">未設定</div>
           </div>
         </div>
@@ -326,15 +338,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const VERSION = 'v1.5.1';
+const VERSION = 'v1.5.4';
 
 // ===== STATE =====
 let map, raceMap, startMarker, goalMarker, routeLayer;
-let raceRouteLayer, raceLocMarker, raceGoalMarker;
+let raceRouteLayer, raceLocMarker, raceGoalMarker, raceStartMarker;
 let myLocMarker, myLocCircle;
 let startLL = null, goalLL = null;
 let setupStep = 0;
-let courseDistM = 0, routeCoords = [], estDurSec = 0, straightDistM = 0;
+let courseDistM = 0, routeCoords = [], estDurSec = 0, straightDistM = 0, roadName = '';
 let isRacing = false, raceFinished = false;
 let startTime = null, elapsedMs = 0;
 let maxSpeed = 0, traveledM = 0;
@@ -370,17 +382,23 @@ function initMap() {
 }
 
 function initRaceMap() {
-  if (raceMap) return;
-  raceMap = L.map('race-map', { zoomControl: false, attributionControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    maxZoom: 20, subdomains: 'abcd'
-  }).addTo(raceMap);
+  if (!raceMap) {
+    raceMap = L.map('race-map', { zoomControl: false, attributionControl: false, dragging: true, touchZoom: true, scrollWheelZoom: false });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20, subdomains: 'abcd'
+    }).addTo(raceMap);
+  }
+  // コース・マーカーを毎回再描画
+  if (raceRouteLayer)  { raceMap.removeLayer(raceRouteLayer);  raceRouteLayer  = null; }
+  if (raceGoalMarker)  { raceMap.removeLayer(raceGoalMarker);  raceGoalMarker  = null; }
+  if (raceStartMarker) { raceMap.removeLayer(raceStartMarker); raceStartMarker = null; }
+  if (raceLocMarker)   { raceMap.removeLayer(raceLocMarker);   raceLocMarker   = null; }
+
   if (routeCoords.length) {
-    raceRouteLayer = L.polyline(routeCoords, { color: '#00e5ff', weight: 5, opacity: 0.8 }).addTo(raceMap);
-    raceMap.fitBounds(raceRouteLayer.getBounds(), { padding: [20, 20] });
-    if (goalLL) {
-      raceGoalMarker = L.marker(goalLL, { icon: makeIcon('#ff3d6b', 'G'), zIndexOffset: 200 }).addTo(raceMap);
-    }
+    raceRouteLayer = L.polyline(routeCoords, { color: '#00e5ff', weight: 6, opacity: 0.85 }).addTo(raceMap);
+    if (startLL) raceStartMarker = L.marker(startLL, { icon: makeIcon('#00ff88', 'S'), zIndexOffset: 200 }).addTo(raceMap);
+    if (goalLL)  raceGoalMarker  = L.marker(goalLL,  { icon: makeIcon('#ff3d6b', 'G'), zIndexOffset: 200 }).addTo(raceMap);
+    raceMap.fitBounds(raceRouteLayer.getBounds(), { padding: [28, 28] });
   }
 }
 
@@ -392,8 +410,54 @@ function makeIcon(color, label) {
   });
 }
 
+// editMode: null | 'start' | 'goal'
+let editMode = null;
+
+function setEditMode(mode) {
+  editMode = mode;
+  document.getElementById('pt-card-start').classList.toggle('editing', mode === 'start');
+  document.getElementById('pt-card-goal').classList.toggle('editing', mode === 'goal');
+  if (mode === 'start') setHint('📍', '新しいスタート地点をタップしてください', true);
+  else setHint('🏁', '新しいゴール地点をタップしてください', true);
+}
+
 function onMapClick(e) {
   const ll = e.latlng;
+
+  // 個別変更モード
+  if (editMode === 'start') {
+    if (startMarker) map.removeLayer(startMarker);
+    startMarker = L.marker(ll, { icon: makeIcon('#00ff88', 'S') }).addTo(map);
+    startLL = ll;
+    document.getElementById('start-coords').textContent = ll.lat.toFixed(5) + '\n' + ll.lng.toFixed(5);
+    editMode = null;
+    document.getElementById('pt-card-start').classList.remove('editing');
+    document.getElementById('pt-card-goal').classList.remove('editing');
+    if (goalLL) {
+      setHint('⏳', 'ルートを再検索中...', true);
+      document.getElementById('route-status').innerHTML = '<div class="route-fetch"><span class="spin"></span>道路ルートを取得中...</div>';
+      fetchRoute(startLL, goalLL);
+    } else {
+      setHint('🏁', 'ゴール地点をタップしてください', true);
+      setupStep = 1;
+    }
+    return;
+  }
+  if (editMode === 'goal') {
+    if (goalMarker) map.removeLayer(goalMarker);
+    goalMarker = L.marker(ll, { icon: makeIcon('#ff3d6b', 'G') }).addTo(map);
+    goalLL = ll;
+    document.getElementById('goal-coords').textContent = ll.lat.toFixed(5) + '\n' + ll.lng.toFixed(5);
+    editMode = null;
+    document.getElementById('pt-card-start').classList.remove('editing');
+    document.getElementById('pt-card-goal').classList.remove('editing');
+    setHint('⏳', 'ルートを再検索中...', true);
+    document.getElementById('route-status').innerHTML = '<div class="route-fetch"><span class="spin"></span>道路ルートを取得中...</div>';
+    fetchRoute(startLL, goalLL);
+    return;
+  }
+
+  // 通常フロー
   if (setupStep === 0) {
     if (startMarker) map.removeLayer(startMarker);
     startMarker = L.marker(ll, { icon: makeIcon('#00ff88', 'S') }).addTo(map);
@@ -433,16 +497,20 @@ function setHint(icon, text, showReset) {
 }
 
 function resetCourse() {
-  setupStep = 0;
+  setupStep = 0; editMode = null;
   if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
   clearRoute();
   startLL = null;
   document.getElementById('start-coords').textContent = '未設定';
+  document.getElementById('pt-edit-start').style.display = 'none';
+  document.getElementById('pt-edit-goal').style.display = 'none';
+  document.getElementById('pt-card-start').classList.remove('editing');
+  document.getElementById('pt-card-goal').classList.remove('editing');
   setHint('📍', '地図をタップしてスタート地点を設定', false);
 }
 
 async function fetchRoute(start, goal) {
-  const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${goal.lng},${goal.lat}?overview=full&geometries=geojson`;
+  const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${goal.lng},${goal.lat}?overview=full&geometries=geojson&annotations=true&steps=true`;
   try {
     const res = await fetch(url);
     const data = await res.json();
@@ -451,9 +519,32 @@ async function fetchRoute(start, goal) {
     courseDistM = route.distance; estDurSec = route.duration;
     routeCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
     straightDistM = haversine(start.lat, start.lng, goal.lat, goal.lng);
+
+    // OSRM steps から道路名を収集
+    const nameSet = new Set();
+    if (route.legs) {
+      route.legs.forEach(leg => {
+        if (leg.steps) leg.steps.forEach(step => {
+          if (step.name && step.name.trim() && step.name !== '道路なし' && step.name !== '') nameSet.add(step.name.trim());
+        });
+      });
+    }
+    // 中点付近をNominatimで逆ジオコーディングして道路名を補完
+    const midCoord = routeCoords[Math.floor(routeCoords.length / 2)];
+    try {
+      const nr = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${midCoord[0]}&lon=${midCoord[1]}&format=json&zoom=16&accept-language=ja`, { headers: { 'Accept-Language': 'ja' } });
+      const nd = await nr.json();
+      const road = nd.address?.road || nd.address?.pedestrian || nd.address?.path || '';
+      if (road) nameSet.add(road);
+    } catch(e) {}
+
+    roadName = [...nameSet].slice(0, 3).join(' / ') || '';
+
     if (routeLayer) map.removeLayer(routeLayer);
     routeLayer = L.polyline(routeCoords, { color: '#00e5ff', weight: 5, opacity: 0.85 }).addTo(map);
     map.fitBounds(routeLayer.getBounds(), { padding: [28, 28] });
+
+    const roadNameHTML = roadName ? `<div class="route-roadname">🛣 ${roadName}</div>` : '';
     document.getElementById('route-status').innerHTML = `
       <div class="route-card">
         <div class="ri"><div class="ri-label">道路沿い</div><div class="ri-val">${fmtDist(courseDistM)}</div></div>
@@ -461,10 +552,13 @@ async function fetchRoute(start, goal) {
         <div class="ri"><div class="ri-label">推定時間</div><div class="ri-val">${fmtDur(estDurSec)}</div></div>
         <div class="rdiv"></div>
         <div class="ri"><div class="ri-label">直線距離</div><div class="ri-val">${fmtDist(straightDistM)}</div></div>
-      </div>`;
+      </div>
+      ${roadNameHTML}`;
     setHint('✅', 'コース設定完了。タップでリセット。', true);
     document.getElementById('btn-go').disabled = false;
     document.getElementById('btn-save').disabled = false;
+    document.getElementById('pt-edit-start').style.display = '';
+    document.getElementById('pt-edit-goal').style.display = '';
   } catch {
     document.getElementById('route-status').innerHTML = '<div class="route-err">ルートが見つかりませんでした。別の地点を試してください。</div>';
     setupStep = 1; setHint('🏁', 'ゴール地点を再設定してください', true);
@@ -518,7 +612,7 @@ function startCountdown() {
   getAudioCtx();
   document.getElementById('cd-overlay').classList.add('show');
   speak('スタートします');
-  setTimeout(() => runCountStep(5), 1200);
+  setTimeout(() => runCountStep(5), 2200);
 }
 
 function runCountStep(n) {
@@ -604,9 +698,19 @@ function beginRace() {
       if (raceMap) {
         const ll = [pos.coords.latitude, pos.coords.longitude];
         if (!raceLocMarker) {
-          raceLocMarker = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div style="width:18px;height:18px;border-radius:50%;background:#00e5ff;border:3px solid #fff;box-shadow:0 0 12px rgba(0,229,255,0.9)"></div>', iconSize:[18,18], iconAnchor:[9,9] }), zIndexOffset:600 }).addTo(raceMap);
-        } else { raceLocMarker.setLatLng(ll); }
-        raceMap.setView(ll, 16, { animate: true, duration: 0.8 });
+          raceLocMarker = L.marker(ll, { icon: L.divIcon({
+            className: '',
+            html: `<div style="position:relative;width:22px;height:22px">
+              <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,229,255,0.25);animation:pulse 1.5s infinite"></div>
+              <div style="position:absolute;inset:3px;border-radius:50%;background:#00e5ff;border:2.5px solid #fff;box-shadow:0 0 10px rgba(0,229,255,0.9)"></div>
+            </div>`,
+            iconSize:[22,22], iconAnchor:[11,11]
+          }), zIndexOffset:600 }).addTo(raceMap);
+        } else {
+          raceLocMarker.setLatLng(ll);
+        }
+        // 現在地を中心に、コース全体が見えるズームを維持
+        raceMap.setView(ll, raceMap.getZoom() < 14 ? 15 : raceMap.getZoom(), { animate: true, duration: 0.5 });
       }
 
       document.getElementById('gps-dot').classList.add('ok');
@@ -663,7 +767,7 @@ function finishRace(manual) {
     document.getElementById('prog-fill').style.width = '100%';
     document.getElementById('pct-label').textContent = '100%';
     const avg = elapsedMs > 0 ? (traveledM / 1000) / (elapsedMs / 3600000) : 0;
-    records.unshift({ time: elapsedMs, dist: courseDistM, maxSpd: maxSpeed, avgSpd: avg, date: new Date().toLocaleDateString('ja-JP'), recordedAt: new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'}) });
+    records.unshift({ time: elapsedMs, dist: courseDistM, maxSpd: maxSpeed, avgSpd: avg, date: new Date().toLocaleDateString('ja-JP'), recordedAt: new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'}), roadName: roadName });
     records = records.slice(0, 20);
     localStorage.setItem('ta_records', JSON.stringify(records));
     setTimeout(() => showTab('records'), 1800);
@@ -702,6 +806,7 @@ function renderRecords() {
       <div class="rec-num">${i === 0 ? '<span class="rec-new">NEW</span>' : (i+1)}</div>
       <div class="rec-info">
         <div class="rec-date">${r.date} ${r.recordedAt || ''}</div>
+        ${r.roadName ? `<div class="rec-road">🛣 ${r.roadName}</div>` : ''}
         <div class="rec-dist">${fmtDist(r.dist)} · 最高 ${r.maxSpd.toFixed(1)} km/h · 平均 ${r.avgSpd.toFixed(1)} km/h</div>
       </div>
       <div class="rec-right">
@@ -742,7 +847,8 @@ function saveCourse() {
     startLL: { lat: startLL.lat, lng: startLL.lng },
     goalLL: { lat: goalLL.lat, lng: goalLL.lng },
     distM: courseDistM, durSec: estDurSec,
-    routeCoords: routeCoords.slice()
+    routeCoords: routeCoords.slice(),
+    roadName: roadName
   };
   savedCourses.unshift(course);
   savedCourses = savedCourses.slice(0, 20);
@@ -770,6 +876,7 @@ function loadCourse(i) {
   courseDistM  = c.distM;
   estDurSec    = c.durSec;
   routeCoords  = c.routeCoords.slice();
+  roadName     = c.roadName || '';
   straightDistM = haversine(startLL.lat, startLL.lng, goalLL.lat, goalLL.lng);
   setupStep = 2;
 
@@ -793,6 +900,8 @@ function loadCourse(i) {
       <div class="ri"><div class="ri-label">直線距離</div><div class="ri-val">${fmtDist(straightDistM)}</div></div>
     </div>`;
   setHint('✅', `「${c.name}」を読み込みました。タップでリセット。`, true);
+  document.getElementById('pt-edit-start').style.display = '';
+  document.getElementById('pt-edit-goal').style.display = '';
   document.getElementById('btn-go').disabled = false;
   document.getElementById('btn-save').disabled = false;
 }
